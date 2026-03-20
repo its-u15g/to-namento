@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>令和7年度 浦添・那覇地区中学生春季ハンドボール大会 結果管理</title>
+    <title>大会結果報告 | 令和7年度 浦添・那覇地区中学生春季ハンドボール大会</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -11,27 +11,21 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap');
         
-        body {
-            font-family: 'Noto Sans JP', sans-serif;
-        }
-
+        body { font-family: 'Noto Sans JP', sans-serif; background-color: #f8fafc; }
+        
         @media print {
             @page { size: A4 portrait; margin: 10mm; }
-            body { background: white !important; }
+            body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .no-print { display: none !important; }
-            .print-shrink { transform: scale(0.9); transform-origin: top center; }
+            .print-wrapper { transform: scale(0.96); transform-origin: top center; }
         }
 
-        /* 数値入力の矢印を非表示 */
+        /* スコア入力矢印の非表示 */
         input::-webkit-outer-spin-button,
         input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-
-        .bracket-line {
-            border-color: #cbd5e1; /* slate-300 */
-        }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-900">
+<body class="text-slate-900">
     <div id="root"></div>
 
     <script type="text/babel">
@@ -42,21 +36,23 @@
             m2: { p1: "昭薬", p2: "ITS", s1: "", s2: "", winner: null, loser: null, time: "9:30", official: "松島" },
             m3: { p1: "コラソン", p2: "港川", s1: "", s2: "", winner: null, loser: null, time: "10:00", official: "ITS" },
             m4: { p1: "石田", p2: "浦添", s1: "", s2: "", winner: null, loser: null, time: "10:30", official: "港川" },
-            m5: { p1: null, p2: null, s1: "", s2: "", winner: null, time: "11:00", official: "浦添" },
-            m6: { p1: null, p2: null, s1: "", s2: "", winner: null, time: "11:30", official: "5勝者" },
-            m7: { p1: null, p2: null, s1: "", s2: "", winner: null, loser: null, time: "12:00", official: "6勝者" },
-            m8: { p1: null, p2: null, s1: "", s2: "", winner: null, loser: null, time: "12:30", official: "浦西" },
-            m9: { p1: null, p2: null, s1: "", s2: "", winner: null, time: "13:00", official: "8敗者" },
-            m10: { p1: null, p2: null, s1: "", s2: "", winner: null, time: "13:30", official: "9勝者" },
-            m11: { p1: null, p2: null, s1: "", s2: "", winner: null, time: "14:00", official: "10敗者" }
+            m5: { p1: "1敗者", p2: "2敗者", s1: "", s2: "", winner: null, time: "11:00", official: "浦添" },
+            m6: { p1: "3敗者", p2: "4敗者", s1: "", s2: "", winner: null, time: "11:30", official: "5の勝者" },
+            m7: { p1: "1勝者", p2: "2勝者", s1: "", s2: "", winner: null, loser: null, time: "12:00", official: "6の勝者" },
+            m8: { p1: "3勝者", p2: "4勝者", s1: "", s2: "", winner: null, loser: null, time: "12:30", official: "浦西" },
+            m9: { p1: "5勝者", p2: "6勝者", s1: "", s2: "", winner: null, time: "13:00", official: "8の敗者" },
+            m10: { p1: "7敗者", p2: "8敗者", s1: "", s2: "", winner: null, time: "13:30", official: "9の勝者" },
+            m11: { p1: "7勝者", p2: "8勝者", s1: "", s2: "", winner: null, time: "14:00", official: "10の敗者" }
         };
+
+        const isPlaceholder = (name) => !name || name.includes("勝者") || name.includes("敗者");
 
         const App = () => {
             const [matches, setMatches] = useState(INITIAL_STATE);
 
             const setWinner = (matchId, winnerSide) => {
                 const match = matches[matchId];
-                if (!match.p1 || !match.p2) return;
+                if (isPlaceholder(match.p1) || isPlaceholder(match.p2)) return;
 
                 const winnerName = winnerSide === 'p1' ? match.p1 : match.p2;
                 const loserName = winnerSide === 'p1' ? match.p2 : match.p1;
@@ -65,7 +61,6 @@
                 next[matchId].winner = winnerName;
                 next[matchId].loser = loserName;
 
-                // 勝ち上がり・負け下がりロジック
                 if (matchId === 'm1') { next.m5.p1 = loserName; next.m7.p1 = winnerName; }
                 if (matchId === 'm2') { next.m5.p2 = loserName; next.m7.p2 = winnerName; }
                 if (matchId === 'm3') { next.m6.p1 = loserName; next.m8.p1 = winnerName; }
@@ -85,130 +80,132 @@
                 }));
             };
 
-            const MatchCard = ({ id, label, match, isFinal = false }) => (
-                <div className={`relative flex flex-col w-52 bg-white border-2 rounded shadow-sm overflow-hidden z-10 ${isFinal ? 'border-yellow-500 ring-2 ring-yellow-100' : 'border-slate-300'}`}>
-                    <div className="bg-slate-100 border-b px-2 py-0.5 text-[10px] font-bold text-slate-600 flex justify-between items-center print:bg-white">
-                        <span>{match.time} (No.{label})</span>
-                        <span className="bg-white px-1 rounded border border-slate-200 text-[9px]">役: {match.official}</span>
-                    </div>
-                    {[1, 2].map(num => (
-                        <div key={num} className={`flex items-center h-10 ${match.winner === match[`p${num}`] ? 'bg-blue-50' : ''} ${num === 2 ? 'border-t border-slate-200' : ''}`}>
-                            <button 
-                                onClick={() => setWinner(id, `p${num}`)}
-                                disabled={!match.p1 || !match.p2 || !!match.winner}
-                                className={`flex-1 text-left px-2 text-[13px] font-black truncate ${!match[`p${num}`] ? 'text-slate-300 italic' : 'text-slate-900'}`}
-                            >
-                                {match[`p${num}`] || "---"}
-                            </button>
-                            <input 
-                                type="number" 
-                                value={match[`s${num}`]} 
-                                onChange={(e) => updateScore(id, `s${num}`, e.target.value)}
-                                className="w-12 h-full border-l border-slate-200 text-center text-lg font-black text-blue-800 focus:bg-yellow-50 outline-none"
-                            />
+            const MatchCard = ({ id, label, match, isFinal = false }) => {
+                const ready = !isPlaceholder(match.p1) && !isPlaceholder(match.p2);
+                return (
+                    <div className={`w-[220px] h-[100px] bg-white border-[2px] rounded overflow-hidden shadow-sm flex flex-col z-10 relative ${isFinal ? 'border-yellow-400 ring-2 ring-yellow-100' : 'border-slate-400'}`}>
+                        <div className="h-[24px] bg-slate-100 border-b border-slate-300 px-2 flex justify-between items-center text-[10px] font-black text-slate-700">
+                            <span>{match.time} (No.{label})</span>
+                            <span className="bg-white px-1 rounded border border-slate-300 font-bold">オフィシャル: {match.official}</span>
                         </div>
-                    ))}
-                </div>
-            );
+                        {[1, 2].map(num => {
+                            const side = `p${num}`;
+                            const isWinner = match.winner === match[side];
+                            const isPReady = !isPlaceholder(match[side]);
+                            return (
+                                <div key={num} className={`h-[38px] flex items-center ${isWinner ? 'bg-blue-50' : ''} ${num === 2 ? 'border-t border-slate-300' : ''}`}>
+                                    <button 
+                                        onClick={() => setWinner(id, side)}
+                                        disabled={!ready || !!match.winner}
+                                        className={`flex-1 text-left px-3 text-[14px] truncate outline-none ${isPReady ? 'text-slate-900 font-black' : 'text-slate-400 font-bold text-[12px]'}`}
+                                    >
+                                        {match[side]}
+                                    </button>
+                                    <input 
+                                        type="number" 
+                                        value={match[`s${num}`]} 
+                                        onChange={(e) => updateScore(id, `s${num}`, e.target.value)}
+                                        className="w-[46px] h-full border-l border-slate-300 text-center text-[16px] font-black text-blue-800 focus:bg-yellow-100 outline-none"
+                                    />
+                                </div>
+                            );
+                        })}
+                    </div>
+                );
+            };
 
             return (
-                <div className="min-h-screen p-4 sm:p-8">
-                    {/* Header */}
-                    <div className="max-w-[1100px] mx-auto mb-8 flex flex-col sm:flex-row justify-between items-end border-b-4 border-slate-900 pb-4 no-print gap-4">
+                <div className="min-h-screen py-8 px-4">
+                    {/* 操作ヘッダー */}
+                    <div className="max-w-[840px] mx-auto mb-8 flex justify-between items-end border-b-4 border-slate-900 pb-4 no-print">
                         <div>
                             <h1 className="text-xl font-black text-slate-900">令和7年度 浦添・那覇地区中学生春季ハンドボール大会</h1>
-                            <p className="text-slate-500 font-bold text-sm mt-1 flex gap-4">
-                                <span>女子会場：浦西中学校 体育館</span>
-                                <span className="text-blue-600">※2桁スコア入力対応</span>
-                            </p>
+                            <p className="text-slate-500 font-bold text-sm mt-1">結果管理システム（女子の部）</p>
                         </div>
                         <div className="flex gap-2">
-                            <button onClick={() => window.print()} className="bg-slate-900 text-white px-4 py-2 rounded font-bold text-sm flex items-center gap-2 hover:bg-slate-800">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
-                                A4印刷
+                            <button onClick={() => window.print()} className="bg-slate-900 text-white px-5 py-2 rounded-md font-bold text-sm shadow hover:bg-slate-800 transition">
+                                A4 印刷 / PDF
                             </button>
-                            <button onClick={() => window.confirm("データをリセットしますか？") && setMatches(INITIAL_STATE)} className="bg-white text-slate-400 px-4 py-2 rounded border border-slate-200 text-sm font-bold hover:text-red-500">
+                            <button onClick={() => window.confirm("データをリセットしますか？") && setMatches(INITIAL_STATE)} className="bg-white text-slate-500 px-4 py-2 rounded-md border border-slate-300 font-bold text-sm hover:text-red-500 transition">
                                 リセット
                             </button>
                         </div>
                     </div>
 
                     {/* 印刷用ヘッダー */}
-                    <div className="hidden print:block text-center mb-10 border-b-4 border-black pb-4">
-                        <h1 className="text-2xl font-black">大会結果報告（女子の部）</h1>
-                        <p className="text-base mt-1 font-bold">令和7年度 浦添・那覇地区中学生春季ハンドボール大会</p>
-                        <div className="flex justify-between mt-6 font-bold text-xs uppercase tracking-tighter">
+                    <div className="max-w-[840px] mx-auto hidden print:block text-center mb-8 border-b-4 border-black pb-4">
+                        <h1 className="text-3xl font-black tracking-tight">大会結果報告（女子の部）</h1>
+                        <p className="text-lg mt-2 font-bold tracking-widest">令和7年度 浦添・那覇地区中学生春季ハンドボール大会</p>
+                        <div className="flex justify-between mt-6 font-bold text-sm">
                             <span>会場：浦西中学校 体育館</span>
                             <span>作成日：{new Date().toLocaleDateString('ja-JP')}</span>
                         </div>
                     </div>
 
-                    <div className="max-w-[1100px] mx-auto print-shrink">
+                    {/* メイン・コンテナ（絶対座標で描画を固定） */}
+                    <div className="max-w-[840px] mx-auto print-wrapper bg-white print:bg-transparent p-6 print:p-0 rounded-xl shadow-sm print:shadow-none border print:border-none border-slate-200">
+                        
                         {/* メイントーナメント */}
-                        <section className="mb-20">
-                            <h2 className="text-sm font-black text-slate-400 mb-8 border-l-4 border-blue-600 pl-2 no-print">メイントーナメント</h2>
-                            <div className="flex items-start justify-between relative">
-                                {/* 1回戦 */}
-                                <div className="flex flex-col gap-8">
-                                    <MatchCard id="m1" label="1" match={matches.m1} />
-                                    <MatchCard id="m2" label="2" match={matches.m2} />
-                                    <MatchCard id="m3" label="3" match={matches.m3} />
-                                    <MatchCard id="m4" label="4" match={matches.m4} />
-                                </div>
+                        <div className="mb-8">
+                            <h2 className="text-sm font-black text-slate-500 mb-4 border-l-4 border-blue-600 pl-2 no-print">メイントーナメント</h2>
+                            
+                            <div className="relative w-[780px] h-[560px]">
+                                {/* トーナメント線 (R1 -> R2) */}
+                                <div className="absolute border-r-[2px] border-y-[2px] border-slate-400 rounded-r" style={{ left: '220px', width: '30px', top: '50px', height: '140px' }}></div>
+                                <div className="absolute border-t-[2px] border-slate-400" style={{ left: '250px', width: '30px', top: '120px' }}></div>
+                                
+                                <div className="absolute border-r-[2px] border-y-[2px] border-slate-400 rounded-r" style={{ left: '220px', width: '30px', top: '370px', height: '140px' }}></div>
+                                <div className="absolute border-t-[2px] border-slate-400" style={{ left: '250px', width: '30px', top: '440px' }}></div>
 
-                                {/* 線 1回戦-準決勝 */}
-                                <div className="flex flex-col justify-around py-14 h-[512px]">
-                                    <div className="w-12 h-24 border-y-2 border-r-2 bracket-line rounded-r-lg"></div>
-                                    <div className="w-12 h-24 border-y-2 border-r-2 bracket-line rounded-r-lg"></div>
-                                </div>
+                                {/* トーナメント線 (R2 -> 決勝) */}
+                                <div className="absolute border-r-[2px] border-y-[2px] border-slate-400 rounded-r" style={{ left: '500px', width: '30px', top: '120px', height: '320px' }}></div>
+                                <div className="absolute border-t-[2px] border-slate-400" style={{ left: '530px', width: '30px', top: '280px' }}></div>
 
-                                {/* 準決勝 */}
-                                <div className="flex flex-col gap-40 pt-12">
-                                    <MatchCard id="m7" label="7" match={matches.m7} />
-                                    <MatchCard id="m8" label="8" match={matches.m8} />
-                                </div>
+                                {/* 1回戦 (Col 1) */}
+                                <div className="absolute left-0" style={{ top: '0px' }}><MatchCard id="m1" label="1" match={matches.m1} /></div>
+                                <div className="absolute left-0" style={{ top: '140px' }}><MatchCard id="m2" label="2" match={matches.m2} /></div>
+                                <div className="absolute left-0" style={{ top: '320px' }}><MatchCard id="m3" label="3" match={matches.m3} /></div>
+                                <div className="absolute left-0" style={{ top: '460px' }}><MatchCard id="m4" label="4" match={matches.m4} /></div>
 
-                                {/* 線 準決勝-決勝 */}
-                                <div className="flex flex-col justify-center h-[512px]">
-                                    <div className="w-12 h-[224px] border-y-2 border-r-2 bracket-line rounded-r-lg"></div>
-                                </div>
+                                {/* 準決勝 (Col 2) */}
+                                <div className="absolute left-[280px]" style={{ top: '70px' }}><MatchCard id="m7" label="7" match={matches.m7} /></div>
+                                <div className="absolute left-[280px]" style={{ top: '390px' }}><MatchCard id="m8" label="8" match={matches.m8} /></div>
 
-                                {/* 決勝・3決 */}
-                                <div className="flex flex-col gap-12 pt-32 ml-4 items-center">
-                                    <div className="flex flex-col items-center">
-                                        <div className="text-[10px] font-black text-yellow-600 mb-1">決勝戦</div>
-                                        <MatchCard id="m11" label="11" match={matches.m11} isFinal={true} />
-                                    </div>
-                                    <div className="mt-8 pt-8 border-t-2 border-slate-200 border-dashed w-full flex flex-col items-center">
-                                        <div className="text-[10px] font-bold text-slate-400 mb-1">3位決定戦</div>
-                                        <MatchCard id="m10" label="10" match={matches.m10} />
-                                    </div>
+                                {/* 決勝・3決 (Col 3) */}
+                                <div className="absolute left-[560px]" style={{ top: '230px' }}>
+                                    <div className="text-[12px] font-black text-yellow-500 mb-1 text-center tracking-widest">決勝戦</div>
+                                    <MatchCard id="m11" label="11" match={matches.m11} isFinal={true} />
+                                </div>
+                                <div className="absolute left-[560px]" style={{ top: '460px' }}>
+                                    <div className="text-[11px] font-bold text-slate-500 mb-1 text-center tracking-widest">3位決定戦</div>
+                                    <MatchCard id="m10" label="10" match={matches.m10} />
                                 </div>
                             </div>
-                        </section>
+                        </div>
 
                         {/* 敗者交流戦 */}
-                        <section className="bg-slate-50 p-8 rounded-xl border-2 border-slate-200 print:bg-white print:p-0 print:border-none">
-                            <h2 className="text-sm font-black text-slate-400 mb-8 border-l-4 border-slate-400 pl-2 no-print uppercase">敗者交流戦</h2>
-                            <div className="flex items-start gap-12">
-                                <div className="flex flex-col gap-8">
-                                    <MatchCard id="m5" label="5" match={matches.m5} />
-                                    <MatchCard id="m6" label="6" match={matches.m6} />
-                                </div>
-                                <div className="flex flex-col justify-center h-[240px]">
-                                    <div className="w-12 h-20 border-y-2 border-r-2 bracket-line rounded-r-lg"></div>
-                                </div>
-                                <div className="pt-10">
-                                    <div className="text-[10px] font-bold text-slate-400 mb-1">敗者交流戦 決勝</div>
+                        <div className="bg-slate-50 p-6 rounded-lg border border-slate-200 print:bg-transparent print:p-0 print:border-none">
+                            <h2 className="text-sm font-black text-slate-500 mb-4 border-l-4 border-slate-400 pl-2 no-print">敗者交流戦</h2>
+                            
+                            <div className="relative w-[500px] h-[240px]">
+                                {/* トーナメント線 */}
+                                <div className="absolute border-r-[2px] border-y-[2px] border-slate-400 rounded-r" style={{ left: '220px', width: '30px', top: '50px', height: '140px' }}></div>
+                                <div className="absolute border-t-[2px] border-slate-400" style={{ left: '250px', width: '30px', top: '120px' }}></div>
+
+                                {/* 敗者戦カード */}
+                                <div className="absolute left-0" style={{ top: '0px' }}><MatchCard id="m5" label="5" match={matches.m5} /></div>
+                                <div className="absolute left-0" style={{ top: '140px' }}><MatchCard id="m6" label="6" match={matches.m6} /></div>
+                                <div className="absolute left-[280px]" style={{ top: '70px' }}>
+                                    <div className="text-[11px] font-bold text-slate-500 mb-1 text-center tracking-widest">敗者交流戦</div>
                                     <MatchCard id="m9" label="9" match={matches.m9} />
                                 </div>
                             </div>
-                        </section>
+                        </div>
 
-                        {/* 印刷用署名 */}
-                        <div className="hidden print:flex mt-16 justify-end gap-12 font-bold text-[10px]">
-                            <div className="border-b border-black w-48 text-right pb-1 pr-2">審判長 認印：　　　</div>
-                            <div className="border-b border-black w-48 text-right pb-1 pr-2">大会責任者 認印：　　　</div>
+                        {/* 署名欄 */}
+                        <div className="flex mt-12 justify-end gap-16 font-black text-[14px]">
+                            <div className="border-b border-black w-64 text-right pb-1 pr-2">審判長 認印：　　　　</div>
+                            <div className="border-b border-black w-64 text-right pb-1 pr-2">会場責任者 認印：　　　　</div>
                         </div>
                     </div>
                 </div>
@@ -220,4 +217,3 @@
     </script>
 </body>
 </html>
-
