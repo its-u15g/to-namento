@@ -1,253 +1,120 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>大会結果報告 | 令和7年度 浦添・那覇地区中学生春季ハンドボール大会</title>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap');
-        
-        body { font-family: 'Noto Sans JP', sans-serif; background-color: #f8fafc; }
-        
-        @media print {
-            @page { size: A4 portrait; margin: 10mm; }
-            body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            .no-print { display: none !important; }
-            .print-wrapper { transform: scale(0.96); transform-origin: top center; }
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>大会トーナメント</title>
 
-        /* スコア入力矢印の非表示 */
-        input::-webkit-outer-spin-button,
-        input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-    </style>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+
+<style>
+body {
+  font-family: 'Noto Sans JP', sans-serif;
+  background: #f8fafc;
+}
+
+/* 横スクロールUX改善 */
+.scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 10px;
+}
+
+.scroll-x::-webkit-scrollbar {
+  height: 6px;
+}
+.scroll-x::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+</style>
 </head>
-<body class="text-slate-900">
-    <div id="root"></div>
 
-    <script type="text/babel">
-        const { useState } = React;
+<body>
+<div id="root"></div>
 
-        const INITIAL_STATE = {
-            m1: { p1: "浦西", p2: "松島", s1: "", s2: "", winner: null, loser: null, time: "9:00", official: "石田" },
-            m2: { p1: "昭薬", p2: "ITS", s1: "", s2: "", winner: null, loser: null, time: "9:30", official: "松島" },
-            m3: { p1: "コラソン", p2: "港川", s1: "", s2: "", winner: null, loser: null, time: "10:00", official: "ITS" },
-            m4: { p1: "石田", p2: "浦添", s1: "", s2: "", winner: null, loser: null, time: "10:30", official: "港川" },
-            m5: { p1: "1敗者", p2: "2敗者", s1: "", s2: "", winner: null, time: "11:00", official: "浦添" },
-            m6: { p1: "3敗者", p2: "4敗者", s1: "", s2: "", winner: null, time: "11:30", official: "5の勝者" },
-            m7: { p1: "1勝者", p2: "2勝者", s1: "", s2: "", winner: null, loser: null, time: "12:00", official: "6の勝者" },
-            m8: { p1: "3勝者", p2: "4勝者", s1: "", s2: "", winner: null, loser: null, time: "12:30", official: "浦西" },
-            m9: { p1: "5勝者", p2: "6勝者", s1: "", s2: "", winner: null, time: "13:00", official: "8の敗者" },
-            m10: { p1: "7敗者", p2: "8敗者", s1: "", s2: "", winner: null, time: "13:30", official: "9の勝者" },
-            m11: { p1: "7勝者", p2: "8勝者", s1: "", s2: "", winner: null, time: "14:00", official: "10の敗者" }
-        };
+<script type="text/babel">
+const { useState } = React;
 
-        const isPlaceholder = (name) => !name || name.includes("勝者") || name.includes("敗者");
+const INITIAL = {
+  m1:{p1:"浦西",p2:"松島"}, m2:{p1:"昭薬",p2:"ITS"},
+  m3:{p1:"コラソン",p2:"港川"}, m4:{p1:"石田",p2:"浦添"},
+  m7:{p1:"1勝者",p2:"2勝者"}, m8:{p1:"3勝者",p2:"4勝者"},
+  m11:{p1:"7勝者",p2:"8勝者"}
+};
 
-        // SVGで描画する滑らかなトーナメント線コンポーネント
-        const BracketPath = ({ startX, startY, endX, endY, active }) => {
-            const midX = startX + 30;
-            const color = active ? "#ef4444" : "#cbd5e1"; // red-500 : slate-300
-            const strokeWidth = active ? 3 : 2;
-            
-            return (
-                <path
-                    d={`M ${startX} ${startY} L ${midX} ${startY} L ${midX} ${endY} L ${endX} ${endY}`}
-                    fill="none"
-                    stroke={color}
-                    strokeWidth={strokeWidth}
-                    strokeLinejoin="round"
-                    style={{ transition: 'all 0.3s ease' }}
-                />
-            );
-        };
+const POS = {
+  m1:{x:0,y:0}, m2:{x:0,y:140},
+  m3:{x:0,y:320}, m4:{x:0,y:460},
+  m7:{x:280,y:70}, m8:{x:280,y:390},
+  m11:{x:560,y:230}
+};
 
-        const App = () => {
-            const [matches, setMatches] = useState(INITIAL_STATE);
+const Match = ({data}) => (
+  <div className="w-[220px] bg-white border rounded shadow text-sm">
+    <div className="bg-slate-100 px-2 text-[10px] flex justify-between">
+      <span>試合</span><span>VS</span>
+    </div>
+    <div className="p-2">{data.p1}</div>
+    <div className="border-t p-2">{data.p2}</div>
+  </div>
+);
 
-            const setWinner = (matchId, winnerSide) => {
-                const match = matches[matchId];
-                if (isPlaceholder(match.p1) || isPlaceholder(match.p2)) return;
+const Lines = () => (
+  <svg className="absolute inset-0 w-full h-full pointer-events-none">
+    <g stroke="#94a3b8" strokeWidth="2" fill="none">
+      <path d="M220 62 L250 62 L250 202 L220 202" />
+      <path d="M250 132 L280 132" />
+      <path d="M220 382 L250 382 L250 522 L220 522" />
+      <path d="M250 452 L280 452" />
+      <path d="M500 132 L530 132 L530 292 L560 292" />
+      <path d="M500 452 L530 452 L530 292" />
+    </g>
+  </svg>
+);
 
-                const winnerName = winnerSide === 'p1' ? match.p1 : match.p2;
-                const loserName = winnerSide === 'p1' ? match.p2 : match.p1;
+function App() {
+  const [data] = useState(INITIAL);
 
-                const next = JSON.parse(JSON.stringify(matches));
-                next[matchId].winner = winnerName;
-                next[matchId].loser = loserName;
+  return (
+    <div className="p-4">
 
-                if (matchId === 'm1') { next.m5.p1 = loserName; next.m7.p1 = winnerName; }
-                if (matchId === 'm2') { next.m5.p2 = loserName; next.m7.p2 = winnerName; }
-                if (matchId === 'm3') { next.m6.p1 = loserName; next.m8.p1 = winnerName; }
-                if (matchId === 'm4') { next.m6.p2 = loserName; next.m8.p2 = winnerName; }
-                if (matchId === 'm5') { next.m9.p1 = winnerName; }
-                if (matchId === 'm6') { next.m9.p2 = winnerName; }
-                if (matchId === 'm7') { next.m10.p1 = loserName; next.m11.p1 = winnerName; }
-                if (matchId === 'm8') { next.m10.p2 = loserName; next.m11.p2 = winnerName; }
+      {/* タイトル */}
+      <h1 className="text-lg font-bold mb-2">
+        トーナメント表
+      </h1>
 
-                setMatches(next);
-            };
+      {/* スクロールヒント */}
+      <p className="text-xs text-slate-400 mb-2">
+        ← 横にスクロールできます →
+      </p>
 
-            const updateScore = (id, side, val) => {
-                setMatches(prev => ({
-                    ...prev,
-                    [id]: { ...prev[id], [side]: val.slice(0, 3) }
-                }));
-            };
+      {/* 横スクロールエリア */}
+      <div className="scroll-x">
+        
+        {/* 固定幅キャンバス */}
+        <div className="relative w-[800px] h-[600px]">
 
-            const MatchCard = ({ id, label, match, isFinal = false }) => {
-                const ready = !isPlaceholder(match.p1) && !isPlaceholder(match.p2);
-                return (
-                    <div className={`w-[220px] h-[100px] bg-white border-[2px] rounded overflow-hidden shadow-sm flex flex-col z-10 relative ${isFinal ? 'border-yellow-400 ring-2 ring-yellow-100' : 'border-slate-400'}`}>
-                        <div className="h-[24px] bg-slate-100 border-b border-slate-300 px-2 flex justify-between items-center text-[10px] font-black text-slate-700">
-                            <span>{match.time} (No.{label})</span>
-                            <span className="bg-white px-1 rounded border border-slate-300 font-bold">オフィシャル: {match.official}</span>
-                        </div>
-                        {[1, 2].map(num => {
-                            const side = `p${num}`;
-                            const isWinner = match.winner === match[side];
-                            const isPReady = !isPlaceholder(match[side]);
-                            return (
-                                <div key={num} className={`h-[38px] flex items-center transition-colors ${isWinner ? 'bg-red-50' : ''} ${num === 2 ? 'border-t border-slate-300' : ''}`}>
-                                    <button 
-                                        onClick={() => setWinner(id, side)}
-                                        disabled={!ready || !!match.winner}
-                                        className={`flex-1 text-left px-3 text-[14px] truncate outline-none ${isPReady ? 'text-slate-900 font-black' : 'text-slate-400 font-bold text-[12px]'}`}
-                                    >
-                                        {match[side]}
-                                    </button>
-                                    <input 
-                                        type="number" 
-                                        value={match[`s${num}`]} 
-                                        onChange={(e) => updateScore(id, `s${num}`, e.target.value)}
-                                        className={`w-[46px] h-full border-l border-slate-300 text-center text-[16px] font-black focus:bg-yellow-100 outline-none ${isWinner ? 'text-red-600' : 'text-slate-800'}`}
-                                    />
-                                </div>
-                            );
-                        })}
-                    </div>
-                );
-            };
+          <Lines />
 
-            // メイントーナメントの線の座標定義
-            const pathsMain = [
-                { id: 'p1', startX: 220, startY: 50, endX: 280, endY: 120, active: !!matches.m1.winner },
-                { id: 'p2', startX: 220, startY: 190, endX: 280, endY: 120, active: !!matches.m2.winner },
-                { id: 'p3', startX: 220, startY: 370, endX: 280, endY: 440, active: !!matches.m3.winner },
-                { id: 'p4', startX: 220, startY: 510, endX: 280, endY: 440, active: !!matches.m4.winner },
-                { id: 'p7', startX: 500, startY: 120, endX: 560, endY: 280, active: !!matches.m7.winner },
-                { id: 'p8', startX: 500, startY: 440, endX: 560, endY: 280, active: !!matches.m8.winner },
-            ];
+          {Object.entries(POS).map(([id,pos])=>(
+            <div key={id}
+              className="absolute"
+              style={{left:pos.x, top:pos.y}}>
+              <Match data={data[id]} />
+            </div>
+          ))}
 
-            // 敗者戦の線の座標定義
-            const pathsConsolation = [
-                { id: 'l5', startX: 220, startY: 50, endX: 280, endY: 120, active: !!matches.m5.winner },
-                { id: 'l6', startX: 220, startY: 190, endX: 280, endY: 120, active: !!matches.m6.winner },
-            ];
+        </div>
+      </div>
+    </div>
+  );
+}
 
-            return (
-                <div className="min-h-screen py-8 px-4">
-                    {/* 操作ヘッダー */}
-                    <div className="max-w-[840px] mx-auto mb-8 flex justify-between items-end border-b-4 border-slate-900 pb-4 no-print">
-                        <div>
-                            <h1 className="text-xl font-black text-slate-900">令和7年度 浦添・那覇地区中学生春季ハンドボール大会</h1>
-                            <p className="text-slate-500 font-bold text-sm mt-1">結果管理システム（女子の部）</p>
-                        </div>
-                        <div className="flex gap-2">
-                            <button onClick={() => window.print()} className="bg-slate-900 text-white px-5 py-2 rounded-md font-bold text-sm shadow hover:bg-slate-800 transition">
-                                A4 印刷 / PDF
-                            </button>
-                            <button onClick={() => window.confirm("データをリセットしますか？") && setMatches(INITIAL_STATE)} className="bg-white text-slate-500 px-4 py-2 rounded-md border border-slate-300 font-bold text-sm hover:text-red-500 transition">
-                                リセット
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* 印刷用ヘッダー */}
-                    <div className="max-w-[840px] mx-auto hidden print:block text-center mb-8 border-b-4 border-black pb-4">
-                        <h1 className="text-3xl font-black tracking-tight">大会結果報告（女子の部）</h1>
-                        <p className="text-lg mt-2 font-bold tracking-widest">令和7年度 浦添・那覇地区中学生春季ハンドボール大会</p>
-                        <div className="flex justify-between mt-6 font-bold text-sm">
-                            <span>会場：浦西中学校 体育館</span>
-                            <span>作成日：{new Date().toLocaleDateString('ja-JP')}</span>
-                        </div>
-                    </div>
-
-                    {/* メイン・コンテナ */}
-                    <div className="max-w-[840px] mx-auto print-wrapper bg-white print:bg-transparent p-6 print:p-0 rounded-xl shadow-sm print:shadow-none border print:border-none border-slate-200">
-                        
-                        {/* メイントーナメント */}
-                        <div className="mb-8 relative">
-                            <h2 className="text-sm font-black text-slate-500 mb-4 border-l-4 border-blue-600 pl-2 no-print">メイントーナメント</h2>
-                            
-                            <div className="relative w-[780px] h-[560px]">
-                                {/* SVG トーナメント線 */}
-                                <svg className="absolute inset-0 pointer-events-none" style={{ width: '100%', height: '100%', zIndex: 0 }}>
-                                    {/* 重なったときに赤い線が必ず上に来るようソートして描画 */}
-                                    {pathsMain.sort((a, b) => (a.active === b.active ? 0 : a.active ? 1 : -1)).map(p => (
-                                        <BracketPath key={p.id} {...p} />
-                                    ))}
-                                </svg>
-
-                                {/* 1回戦 (Col 1) */}
-                                <div className="absolute left-0" style={{ top: '0px' }}><MatchCard id="m1" label="1" match={matches.m1} /></div>
-                                <div className="absolute left-0" style={{ top: '140px' }}><MatchCard id="m2" label="2" match={matches.m2} /></div>
-                                <div className="absolute left-0" style={{ top: '320px' }}><MatchCard id="m3" label="3" match={matches.m3} /></div>
-                                <div className="absolute left-0" style={{ top: '460px' }}><MatchCard id="m4" label="4" match={matches.m4} /></div>
-
-                                {/* 準決勝 (Col 2) */}
-                                <div className="absolute left-[280px]" style={{ top: '70px' }}><MatchCard id="m7" label="7" match={matches.m7} /></div>
-                                <div className="absolute left-[280px]" style={{ top: '390px' }}><MatchCard id="m8" label="8" match={matches.m8} /></div>
-
-                                {/* 決勝・3決 (Col 3) */}
-                                <div className="absolute left-[560px]" style={{ top: '230px' }}>
-                                    <div className="text-[12px] font-black text-yellow-500 mb-1 text-center tracking-widest">決勝戦</div>
-                                    <MatchCard id="m11" label="11" match={matches.m11} isFinal={true} />
-                                </div>
-                                <div className="absolute left-[560px]" style={{ top: '460px' }}>
-                                    <div className="text-[11px] font-bold text-slate-500 mb-1 text-center tracking-widest">3位決定戦</div>
-                                    <MatchCard id="m10" label="10" match={matches.m10} />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* 敗者交流戦 */}
-                        <div className="bg-slate-50 p-6 rounded-lg border border-slate-200 print:bg-transparent print:p-0 print:border-none relative">
-                            <h2 className="text-sm font-black text-slate-500 mb-4 border-l-4 border-slate-400 pl-2 no-print">敗者交流戦</h2>
-                            
-                            <div className="relative w-[500px] h-[240px]">
-                                {/* SVG トーナメント線 (敗者戦用) */}
-                                <svg className="absolute inset-0 pointer-events-none" style={{ width: '100%', height: '100%', zIndex: 0 }}>
-                                    {pathsConsolation.sort((a, b) => (a.active === b.active ? 0 : a.active ? 1 : -1)).map(p => (
-                                        <BracketPath key={p.id} {...p} />
-                                    ))}
-                                </svg>
-
-                                {/* 敗者戦カード */}
-                                <div className="absolute left-0" style={{ top: '0px' }}><MatchCard id="m5" label="5" match={matches.m5} /></div>
-                                <div className="absolute left-0" style={{ top: '140px' }}><MatchCard id="m6" label="6" match={matches.m6} /></div>
-                                <div className="absolute left-[280px]" style={{ top: '70px' }}>
-                                    <div className="text-[11px] font-bold text-slate-500 mb-1 text-center tracking-widest">敗者交流戦 決勝</div>
-                                    <MatchCard id="m9" label="9" match={matches.m9} />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* 署名欄 */}
-                        <div className="flex mt-12 justify-end gap-16 font-black text-[14px]">
-                            <div className="border-b border-black w-64 text-right pb-1 pr-2">審判長 認印：　　　　</div>
-                            <div className="border-b border-black w-64 text-right pb-1 pr-2">会場責任者 認印：　　　　</div>
-                        </div>
-                    </div>
-                </div>
-            );
-        };
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
 </body>
 </html>
