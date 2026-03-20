@@ -13,12 +13,12 @@
 <style>
 body { font-family: 'Noto Sans JP', sans-serif; }
 
-.scroll-x { overflow-x:auto; }
+.scroll-x { overflow-x:auto; -webkit-overflow-scrolling:touch; }
 
 @media print {
   @page { size:A4 portrait; margin:10mm; }
-  body { background:white; }
   .no-print { display:none; }
+  body { background:white; }
 }
 </style>
 </head>
@@ -35,103 +35,132 @@ const INITIAL = {
   m2:{p1:"昭薬",p2:"ITS",s1:"",s2:""},
   m3:{p1:"コラソン",p2:"港川",s1:"",s2:""},
   m4:{p1:"石田",p2:"浦添",s1:"",s2:""},
+  m5:{p1:"1敗者",p2:"2敗者"},
+  m6:{p1:"3敗者",p2:"4敗者"},
+  m7:{p1:"1勝者",p2:"2勝者"},
+  m8:{p1:"3勝者",p2:"4勝者"},
+  m9:{p1:"5勝者",p2:"6勝者"},
+  m10:{p1:"7敗者",p2:"8敗者"},
+  m11:{p1:"7勝者",p2:"8勝者"}
 };
 
-/* ===== アプリ ===== */
+const winner = (m)=>{
+  if(m.s1===""||m.s2==="") return null;
+  return Number(m.s1)>Number(m.s2)?"p1":"p2";
+};
+
 function App(){
 
-const [data,setData] = useState(
-  JSON.parse(localStorage.getItem("data")) || INITIAL
+const [data,setData]=useState(
+  JSON.parse(localStorage.getItem("tournament"))||INITIAL
 );
 
 useEffect(()=>{
-  localStorage.setItem("data",JSON.stringify(data));
+  localStorage.setItem("tournament",JSON.stringify(data));
 },[data]);
 
-return (
-<div className="p-4 text-[12px]">
+const update=(id,side,val)=>{
+  const next={...data,[id]:{...data[id],[side]:val}};
+  const w=winner(next[id]);
 
-{/* ===== タイトル ===== */}
-<div className="text-center mb-2">
-  <h1 className="text-lg font-bold">
-    令和7年度 浦添・那覇地区中学生春季ハンドボール大会
-  </h1>
-  <div className="font-bold">【女子の部】</div>
-</div>
+  if(w){
+    if(id==="m1"){next.m5.p1=next[id].p2;next.m7.p1=next[id][w];}
+    if(id==="m2"){next.m5.p2=next[id].p1;next.m7.p2=next[id][w];}
+    if(id==="m3"){next.m6.p1=next[id].p2;next.m8.p1=next[id][w];}
+    if(id==="m4"){next.m6.p2=next[id].p1;next.m8.p2=next[id][w];}
+    if(id==="m5") next.m9.p1=next[id][w];
+    if(id==="m6") next.m9.p2=next[id][w];
+    if(id==="m7"){next.m10.p1=next[id].p1===next[id][w]?next[id].p2:next[id].p1;next.m11.p1=next[id][w];}
+    if(id==="m8"){next.m10.p2=next[id].p1===next[id][w]?next[id].p2:next[id].p1;next.m11.p2=next[id][w];}
+  }
 
-{/* ===== トーナメント ===== */}
-<div className="mb-4">
+  setData(next);
+};
 
-  <div className="text-center font-bold mb-1">トーナメント</div>
-
-  <div className="scroll-x">
-    <div className="min-w-[700px]">
-
-      {/* SVG完全再現 */}
-      <svg width="700" height="250">
-
-        {/* 決勝 */}
-        <line x1="350" y1="20" x2="350" y2="60" stroke="black"/>
-        <rect x="200" y="0" width="300" height="20" fill="none" stroke="black"/>
-
-        {/* 左 */}
-        <line x1="200" y1="60" x2="200" y2="100" stroke="black"/>
-        <line x1="200" y1="100" x2="100" y2="100" stroke="black"/>
-        <line x1="100" y1="100" x2="100" y2="140" stroke="black"/>
-
-        {/* チーム名 */}
-        <text x="80" y="160">浦西</text>
-        <text x="120" y="160">松島</text>
-
-      </svg>
-
+const Card=(id)=>(
+<div className="w-[160px] border text-xs bg-white">
+  {[1,2].map(n=>(
+    <div key={n} className="flex border-t">
+      <div className="flex-1 px-1">{data[id][`p${n}`]}</div>
+      <input type="number"
+        value={data[id][`s${n}`]||""}
+        onChange={e=>update(id,`s${n}`,e.target.value)}
+        className="w-10 border-l text-center"/>
     </div>
-  </div>
+  ))}
+</div>
+);
 
-  <div className="text-center font-bold mt-2">
-    敗者交流戦
-  </div>
+return (
+<div className="p-3 text-[12px]">
 
+{/* タイトル */}
+<div className="text-center mb-2">
+<h1 className="font-bold text-lg">
+令和7年度 浦添・那覇地区中学生春季ハンドボール大会
+</h1>
+<div className="font-bold">【女子の部】</div>
 </div>
 
-{/* ===== 試合順 ===== */}
-<table className="w-full border text-[11px]">
+{/* トーナメント */}
+<div className="scroll-x">
+<div className="min-w-[700px] relative h-[420px]">
+
+{/* 1回戦 */}
+<div style={{position:"absolute",left:0,top:0}}>{Card("m1")}</div>
+<div style={{position:"absolute",left:0,top:80}}>{Card("m2")}</div>
+<div style={{position:"absolute",left:0,top:220}}>{Card("m3")}</div>
+<div style={{position:"absolute",left:0,top:300}}>{Card("m4")}</div>
+
+{/* 敗者 */}
+<div style={{position:"absolute",left:0,top:140}}>{Card("m5")}</div>
+<div style={{position:"absolute",left:0,top:360}}>{Card("m6")}</div>
+
+{/* 準決勝 */}
+<div style={{position:"absolute",left:200,top:40}}>{Card("m7")}</div>
+<div style={{position:"absolute",left:200,top:260}}>{Card("m8")}</div>
+
+{/* 敗者戦 */}
+<div style={{position:"absolute",left:200,top:180}}>{Card("m9")}</div>
+
+{/* 決勝 */}
+<div style={{position:"absolute",left:400,top:140}}>{Card("m11")}</div>
+
+{/* 3位 */}
+<div style={{position:"absolute",left:400,top:300}}>{Card("m10")}</div>
+
+</div>
+</div>
+
+{/* 試合表 */}
+<table className="w-full border mt-3 text-[11px]">
 <thead>
 <tr className="bg-gray-200">
-<th>試合</th>
-<th>時間</th>
-<th>対戦</th>
-<th>オフィシャル</th>
+<th>試合</th><th>対戦</th>
 </tr>
 </thead>
-
 <tbody>
-<tr><td>1</td><td>9:00</td><td>浦西 - 松島</td><td>石田</td></tr>
-<tr><td>2</td><td>9:30</td><td>昭薬 - ITS</td><td>松島</td></tr>
-<tr><td>3</td><td>10:00</td><td>コラソン - 港川</td><td>ITS</td></tr>
-<tr><td>4</td><td>10:30</td><td>石田 - 浦添</td><td>港川</td></tr>
+{Object.entries(data).map(([k,v],i)=>(
+<tr key={k}>
+<td>{k.replace("m","")}</td>
+<td>{v.p1} - {v.p2}</td>
+</tr>
+))}
 </tbody>
 </table>
 
-{/* ===== ボタン ===== */}
-<div className="no-print mt-3 flex gap-2">
-<button onClick={()=>window.print()}
-className="bg-black text-white px-3 py-1 rounded">
+{/* ボタン */}
+<div className="no-print mt-2 flex gap-2">
+<button onClick={()=>window.print()} className="bg-black text-white px-3 py-1">
 印刷
 </button>
-
-<button onClick={()=>{
-  if(confirm("リセットしますか？")){
-    setData(INITIAL);
-  }
-}}
-className="border px-3 py-1 rounded">
+<button onClick={()=>setData(INITIAL)} className="border px-3 py-1">
 リセット
 </button>
 </div>
 
-{/* ===== 署名 ===== */}
-<div className="mt-6 text-right font-bold">
+{/* 署名 */}
+<div className="mt-4 text-right font-bold">
 会場責任者：＿＿＿＿＿＿＿＿
 </div>
 
