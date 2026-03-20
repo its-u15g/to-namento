@@ -47,6 +47,24 @@
 
         const isPlaceholder = (name) => !name || name.includes("勝者") || name.includes("敗者");
 
+        // SVGで描画する滑らかなトーナメント線コンポーネント
+        const BracketPath = ({ startX, startY, endX, endY, active }) => {
+            const midX = startX + 30;
+            const color = active ? "#ef4444" : "#cbd5e1"; // red-500 : slate-300
+            const strokeWidth = active ? 3 : 2;
+            
+            return (
+                <path
+                    d={`M ${startX} ${startY} L ${midX} ${startY} L ${midX} ${endY} L ${endX} ${endY}`}
+                    fill="none"
+                    stroke={color}
+                    strokeWidth={strokeWidth}
+                    strokeLinejoin="round"
+                    style={{ transition: 'all 0.3s ease' }}
+                />
+            );
+        };
+
         const App = () => {
             const [matches, setMatches] = useState(INITIAL_STATE);
 
@@ -93,7 +111,7 @@
                             const isWinner = match.winner === match[side];
                             const isPReady = !isPlaceholder(match[side]);
                             return (
-                                <div key={num} className={`h-[38px] flex items-center ${isWinner ? 'bg-blue-50' : ''} ${num === 2 ? 'border-t border-slate-300' : ''}`}>
+                                <div key={num} className={`h-[38px] flex items-center transition-colors ${isWinner ? 'bg-red-50' : ''} ${num === 2 ? 'border-t border-slate-300' : ''}`}>
                                     <button 
                                         onClick={() => setWinner(id, side)}
                                         disabled={!ready || !!match.winner}
@@ -105,7 +123,7 @@
                                         type="number" 
                                         value={match[`s${num}`]} 
                                         onChange={(e) => updateScore(id, `s${num}`, e.target.value)}
-                                        className="w-[46px] h-full border-l border-slate-300 text-center text-[16px] font-black text-blue-800 focus:bg-yellow-100 outline-none"
+                                        className={`w-[46px] h-full border-l border-slate-300 text-center text-[16px] font-black focus:bg-yellow-100 outline-none ${isWinner ? 'text-red-600' : 'text-slate-800'}`}
                                     />
                                 </div>
                             );
@@ -113,6 +131,22 @@
                     </div>
                 );
             };
+
+            // メイントーナメントの線の座標定義
+            const pathsMain = [
+                { id: 'p1', startX: 220, startY: 50, endX: 280, endY: 120, active: !!matches.m1.winner },
+                { id: 'p2', startX: 220, startY: 190, endX: 280, endY: 120, active: !!matches.m2.winner },
+                { id: 'p3', startX: 220, startY: 370, endX: 280, endY: 440, active: !!matches.m3.winner },
+                { id: 'p4', startX: 220, startY: 510, endX: 280, endY: 440, active: !!matches.m4.winner },
+                { id: 'p7', startX: 500, startY: 120, endX: 560, endY: 280, active: !!matches.m7.winner },
+                { id: 'p8', startX: 500, startY: 440, endX: 560, endY: 280, active: !!matches.m8.winner },
+            ];
+
+            // 敗者戦の線の座標定義
+            const pathsConsolation = [
+                { id: 'l5', startX: 220, startY: 50, endX: 280, endY: 120, active: !!matches.m5.winner },
+                { id: 'l6', startX: 220, startY: 190, endX: 280, endY: 120, active: !!matches.m6.winner },
+            ];
 
             return (
                 <div className="min-h-screen py-8 px-4">
@@ -142,24 +176,21 @@
                         </div>
                     </div>
 
-                    {/* メイン・コンテナ（絶対座標で描画を固定） */}
+                    {/* メイン・コンテナ */}
                     <div className="max-w-[840px] mx-auto print-wrapper bg-white print:bg-transparent p-6 print:p-0 rounded-xl shadow-sm print:shadow-none border print:border-none border-slate-200">
                         
                         {/* メイントーナメント */}
-                        <div className="mb-8">
+                        <div className="mb-8 relative">
                             <h2 className="text-sm font-black text-slate-500 mb-4 border-l-4 border-blue-600 pl-2 no-print">メイントーナメント</h2>
                             
                             <div className="relative w-[780px] h-[560px]">
-                                {/* トーナメント線 (R1 -> R2) */}
-                                <div className="absolute border-r-[2px] border-y-[2px] border-slate-400 rounded-r" style={{ left: '220px', width: '30px', top: '50px', height: '140px' }}></div>
-                                <div className="absolute border-t-[2px] border-slate-400" style={{ left: '250px', width: '30px', top: '120px' }}></div>
-                                
-                                <div className="absolute border-r-[2px] border-y-[2px] border-slate-400 rounded-r" style={{ left: '220px', width: '30px', top: '370px', height: '140px' }}></div>
-                                <div className="absolute border-t-[2px] border-slate-400" style={{ left: '250px', width: '30px', top: '440px' }}></div>
-
-                                {/* トーナメント線 (R2 -> 決勝) */}
-                                <div className="absolute border-r-[2px] border-y-[2px] border-slate-400 rounded-r" style={{ left: '500px', width: '30px', top: '120px', height: '320px' }}></div>
-                                <div className="absolute border-t-[2px] border-slate-400" style={{ left: '530px', width: '30px', top: '280px' }}></div>
+                                {/* SVG トーナメント線 */}
+                                <svg className="absolute inset-0 pointer-events-none" style={{ width: '100%', height: '100%', zIndex: 0 }}>
+                                    {/* 重なったときに赤い線が必ず上に来るようソートして描画 */}
+                                    {pathsMain.sort((a, b) => (a.active === b.active ? 0 : a.active ? 1 : -1)).map(p => (
+                                        <BracketPath key={p.id} {...p} />
+                                    ))}
+                                </svg>
 
                                 {/* 1回戦 (Col 1) */}
                                 <div className="absolute left-0" style={{ top: '0px' }}><MatchCard id="m1" label="1" match={matches.m1} /></div>
@@ -184,19 +215,22 @@
                         </div>
 
                         {/* 敗者交流戦 */}
-                        <div className="bg-slate-50 p-6 rounded-lg border border-slate-200 print:bg-transparent print:p-0 print:border-none">
+                        <div className="bg-slate-50 p-6 rounded-lg border border-slate-200 print:bg-transparent print:p-0 print:border-none relative">
                             <h2 className="text-sm font-black text-slate-500 mb-4 border-l-4 border-slate-400 pl-2 no-print">敗者交流戦</h2>
                             
                             <div className="relative w-[500px] h-[240px]">
-                                {/* トーナメント線 */}
-                                <div className="absolute border-r-[2px] border-y-[2px] border-slate-400 rounded-r" style={{ left: '220px', width: '30px', top: '50px', height: '140px' }}></div>
-                                <div className="absolute border-t-[2px] border-slate-400" style={{ left: '250px', width: '30px', top: '120px' }}></div>
+                                {/* SVG トーナメント線 (敗者戦用) */}
+                                <svg className="absolute inset-0 pointer-events-none" style={{ width: '100%', height: '100%', zIndex: 0 }}>
+                                    {pathsConsolation.sort((a, b) => (a.active === b.active ? 0 : a.active ? 1 : -1)).map(p => (
+                                        <BracketPath key={p.id} {...p} />
+                                    ))}
+                                </svg>
 
                                 {/* 敗者戦カード */}
                                 <div className="absolute left-0" style={{ top: '0px' }}><MatchCard id="m5" label="5" match={matches.m5} /></div>
                                 <div className="absolute left-0" style={{ top: '140px' }}><MatchCard id="m6" label="6" match={matches.m6} /></div>
                                 <div className="absolute left-[280px]" style={{ top: '70px' }}>
-                                    <div className="text-[11px] font-bold text-slate-500 mb-1 text-center tracking-widest">敗者交流戦</div>
+                                    <div className="text-[11px] font-bold text-slate-500 mb-1 text-center tracking-widest">敗者交流戦 決勝</div>
                                     <MatchCard id="m9" label="9" match={matches.m9} />
                                 </div>
                             </div>
