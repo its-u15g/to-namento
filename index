@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>令和7年度 春季ハンドボール大会 結果管理</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @media print {
+            @page { 
+                size: A4 portrait; 
+                margin: 0; /* ブラウザのデフォルトマージンを消して制御 */
+            }
+            body { 
+                -webkit-print-color-adjust: exact; 
+                background-color: white !important; 
+            }
+            .no-print { display: none !important; }
+            .print-container {
+                width: 210mm;
+                height: 297mm;
+                padding: 15mm;
+                margin: 0 auto;
+                position: relative;
+            }
+            /* 印刷時のスケール調整 */
+            .print-scale {
+                transform: scale(0.95);
+                transform-origin: top center;
+            }
+        }
+        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+        }
+        .tournament-line {
+            border-color: #64748b;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-900">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState } = React;
+
+        const INITIAL_STATE = {
+            m1: { p1: "浦西", p2: "松島", s1: "", s2: "", winner: null, loser: null, time: "9:00", official: "石田" },
+            m2: { p1: "昭薬", p2: "ITS", s1: "", s2: "", winner: null, loser: null, time: "9:30", official: "松島" },
+            m3: { p1: "コラソン", p2: "港川", s1: "", s2: "", winner: null, loser: null, time: "10:00", official: "ITS" },
+            m4: { p1: "石田", p2: "浦添", s1: "", s2: "", winner: null, loser: null, time: "10:30", official: "港川" },
+            m5: { p1: null, p2: null, s1: "", s2: "", winner: null, time: "11:00", official: "浦添" },
+            m6: { p1: null, p2: null, s1: "", s2: "", winner: null, time: "11:30", official: "5勝者" },
+            m7: { p1: null, p2: null, s1: "", s2: "", winner: null, loser: null, time: "12:00", official: "6勝者" },
+            m8: { p1: null, p2: null, s1: "", s2: "", winner: null, loser: null, time: "12:30", official: "浦西" },
+            m9: { p1: null, p2: null, s1: "", s2: "", winner: null, time: "13:00", official: "8敗者" },
+            m10: { p1: null, p2: null, s1: "", s2: "", winner: null, time: "13:30", official: "9勝者" },
+            m11: { p1: null, p2: null, s1: "", s2: "", winner: null, time: "14:00", official: "10敗者" }
+        };
+
+        const App = () => {
+            const [matches, setMatches] = useState(INITIAL_STATE);
+
+            const updateScore = (matchId, side, value) => {
+                setMatches(prev => ({
+                    ...prev,
+                    [matchId]: { ...prev[matchId], [side]: value.slice(0, 3) }
+                }));
+            };
+
+            const setWinner = (matchId, winnerSide) => {
+                const match = matches[matchId];
+                if (!match.p1 || !match.p2) return;
+                const winnerName = winnerSide === 'p1' ? match.p1 : match.p2;
+                const loserName = winnerSide === 'p1' ? match.p2 : match.p1;
+
+                const newMatches = { ...matches };
+                newMatches[matchId].winner = winnerName;
+                newMatches[matchId].loser = loserName;
+
+                // 配分ロジック
+                if (matchId === 'm1') { newMatches.m5.p1 = loserName; newMatches.m7.p1 = winnerName; }
+                if (matchId === 'm2') { newMatches.m5.p2 = loserName; newMatches.m7.p2 = winnerName; }
+                if (matchId === 'm3') { newMatches.m6.p1 = loserName; newMatches.m8.p1 = winnerName; }
+                if (matchId === 'm4') { newMatches.m6.p2 = loserName; newMatches.m8.p2 = winnerName; }
+                if (matchId === 'm5') { newMatches.m9.p1 = winnerName; }
+                if (matchId === 'm6') { newMatches.m9.p2 = winnerName; }
+                if (matchId === 'm7') { newMatches.m10.p1 = loserName; newMatches.m11.p1 = winnerName; }
+                if (matchId === 'm8') { newMatches.m10.p2 = loserName; newMatches.m11.p2 = winnerName; }
+
+                setMatches(newMatches);
+            };
+
+            const MatchCard = ({ id, label, match, isFinal = false, isSmall = false }) => (
+                <div className={`flex flex-col ${isSmall ? 'w-44' : 'w-48'} bg-white border border-slate-300 rounded overflow-hidden print:border-slate-400 print:shadow-none shadow-sm`}>
+                    <div className="bg-slate-50 border-b border-slate-200 px-2 py-0.5 text-[9px] font-bold flex justify-between items-center print:bg-white">
+                        <span>{match.time} (第{label})</span>
+                        <span className="opacity-70">役:{match.official}</span>
+                    </div>
+                    <div className={`flex items-center h-9 ${match.winner && match.winner === match.p1 ? 'bg-blue-50' : ''}`}>
+                        <button 
+                            onClick={() => setWinner(id, 'p1')}
+                            className={`flex-1 text-left px-2 text-xs font-bold truncate ${!match.p1 ? 'text-slate-300 italic' : 'text-slate-900'}`}
+                        >
+                            {match.p1 || "---"}
+                        </button>
+                        <input 
+                            type="number" 
+                            value={match.s1} 
+                            onChange={(e) => updateScore(id, 's1', e.target.value)}
+                            className="w-10 h-full border-l border-slate-200 text-center text-sm font-black text-blue-800 focus:outline-none focus:bg-yellow-50"
+                        />
+                    </div>
+                    <div className={`flex items-center h-9 border-t border-slate-100 ${match.winner && match.winner === match.p2 ? 'bg-blue-50' : ''}`}>
+                        <button 
+                            onClick={() => setWinner(id, 'p2')}
+                            className={`flex-1 text-left px-2 text-xs font-bold truncate ${!match.p2 ? 'text-slate-300 italic' : 'text-slate-900'}`}
+                        >
+                            {match.p2 || "---"}
+                        </button>
+                        <input 
+                            type="number" 
+                            value={match.s2} 
+                            onChange={(e) => updateScore(id, 's2', e.target.value)}
+                            className="w-10 h-full border-l border-slate-200 text-center text-sm font-black text-blue-800 focus:outline-none focus:bg-yellow-50"
+                        />
+                    </div>
+                </div>
+            );
+
+            return (
+                <div className="print-container">
+                    <nav className="no-print bg-slate-800 text-white p-4 flex justify-between items-center mb-6">
+                        <h1 className="font-bold">ハンドボール大会 結果管理パネル</h1>
+                        <div className="flex gap-4">
+                            <button onClick={() => window.print()} className="bg-blue-600 px-4 py-2 rounded font-bold hover:bg-blue-500 transition-colors">A4印刷 (PDF出力)</button>
+                            <button onClick={() => confirm("リセットしますか？") && setMatches(INITIAL_STATE)} className="bg-slate-600 px-3 py-2 rounded text-sm">リセット</button>
+                        </div>
+                    </nav>
+
+                    <div className="print-scale">
+                        {/* 印刷用ヘッダー */}
+                        <header className="text-center mb-8 border-b-4 border-double border-slate-800 pb-4">
+                            <h2 className="text-2xl font-black mb-1">大会結果報告（女子の部）</h2>
+                            <p className="text-sm font-bold opacity-80">令和7年度 浦添・那覇地区中学生春季ハンドボール大会</p>
+                            <div className="flex justify-between mt-4 text-[11px] font-bold px-2">
+                                <span>会場：浦西中学校 体育館</span>
+                                <span>作成日：{new Date().toLocaleDateString('ja-JP')}</span>
+                            </div>
+                        </header>
+
+                        {/* トーナメントエリア */}
+                        <main className="flex flex-col gap-12">
+                            {/* メインツリー */}
+                            <div className="flex justify-center items-start">
+                                {/* 1回戦 */}
+                                <div className="flex flex-col gap-4">
+                                    <MatchCard id="m1" label="1" match={matches.m1} />
+                                    <MatchCard id="m2" label="2" match={matches.m2} />
+                                    <MatchCard id="m3" label="3" match={matches.m3} />
+                                    <MatchCard id="m4" label="4" match={matches.m4} />
+                                </div>
+
+                                {/* 接続線1 */}
+                                <div className="flex flex-col gap-[138px] pt-[38px]">
+                                    <div className="h-[92px] w-6 border-y-2 border-r-2 tournament-line rounded-r"></div>
+                                    <div className="h-[92px] w-6 border-y-2 border-r-2 tournament-line rounded-r"></div>
+                                </div>
+
+                                {/* 準決勝 */}
+                                <div className="flex flex-col gap-[112px] pt-[86px] ml-2">
+                                    <MatchCard id="m7" label="7" match={matches.m7} />
+                                    <MatchCard id="m8" label="8" match={matches.m8} />
+                                </div>
+
+                                {/* 接続線2 */}
+                                <div className="h-[204px] w-6 border-y-2 border-r-2 tournament-line rounded-r mt-[132px] ml-0"></div>
+
+                                {/* 決勝 */}
+                                <div className="flex flex-col items-center pt-[184px] ml-4">
+                                    <div className="bg-slate-800 text-white px-3 py-1 text-[10px] font-bold mb-1 rounded-sm">決勝戦 (第11)</div>
+                                    <MatchCard id="m11" label="11" match={matches.m11} isFinal={true} />
+                                </div>
+                            </div>
+
+                            {/* 下部：3位決定戦と交流戦を整理 */}
+                            <div className="flex justify-between items-start border-t border-slate-200 pt-8 mt-4 px-4">
+                                {/* 敗者戦（交流戦） */}
+                                <div className="flex flex-col">
+                                    <h3 className="text-xs font-black mb-3 text-slate-500 bg-slate-100 w-fit px-2 py-0.5 rounded">敗者交流戦</h3>
+                                    <div className="flex items-start gap-1">
+                                        <div className="flex flex-col gap-2">
+                                            <MatchCard id="m5" label="5" match={matches.m5} isSmall={true} />
+                                            <MatchCard id="m6" label="6" match={matches.m6} isSmall={true} />
+                                        </div>
+                                        <div className="h-[90px] w-4 border-y-2 border-r-2 tournament-line rounded-r mt-9"></div>
+                                        <div className="pt-9">
+                                            <MatchCard id="m9" label="9" match={matches.m9} isSmall={true} />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 3位決定戦 */}
+                                <div className="flex flex-col items-center border-l border-slate-200 pl-12">
+                                    <h3 className="text-xs font-black mb-3 text-slate-500 bg-slate-100 w-fit px-2 py-0.5 rounded">3位決定戦</h3>
+                                    <MatchCard id="m10" label="10" match={matches.m10} isSmall={true} />
+                                </div>
+                            </div>
+                        </main>
+
+                        {/* 捺印欄 */}
+                        <footer className="mt-16 flex justify-end gap-12 font-bold text-xs pr-4">
+                            <div className="border-b border-slate-900 w-44 text-right pb-1 pr-4">審判長 認印：　　</div>
+                            <div className="border-b border-slate-900 w-44 text-right pb-1 pr-4">大会責任者 認印：　　</div>
+                        </footer>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
