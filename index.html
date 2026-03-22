@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>汎用ハンドボール トーナメント結果管理</title>
     
     <!-- React & Tailwind CSS -->
@@ -16,59 +16,94 @@
         
         body { 
             font-family: 'Noto Sans JP', sans-serif; 
-            background-color: #f8fafc; 
+            background-color: #f1f5f9; 
             color: #0f172a;
+            -webkit-text-size-adjust: 100%;
         }
+
+        /* カスタムスクロールバー */
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         
-        /* 印刷設定: チーム数に応じてスケールを調整しA4に収める */
+        /* 印刷設定: 変数を使って動的にスケールを調整 */
         @media print {
             @page { size: A4 portrait; margin: 10mm; }
             body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .no-print { display: none !important; }
             .print-wrapper { box-shadow: none !important; border: none !important; padding: 0 !important; background: transparent !important; }
             
-            .scale-16 { transform: scale(0.70); transform-origin: top left; }
-            .scale-8 { transform: scale(0.95); transform-origin: top center; }
-            .scale-4 { transform: scale(1); transform-origin: top center; }
+            .print-scale-container {
+                transform: scale(var(--print-scale, 1));
+                transform-origin: top left;
+            }
 
-            /* 印刷時の入力欄のボーダーを消して文字だけにする */
             .print-input-clean { border: none !important; background: transparent !important; padding: 0 !important; }
         }
 
+        /* スピンボタン非表示 */
         input[type=number]::-webkit-inner-spin-button, 
         input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        
+        /* ボトムシートのアニメーション */
+        @keyframes slideUp {
+            from { transform: translateY(100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .animate-slide-up { animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+        const { useState, useEffect, useMemo, useRef } = React;
 
-        // === トーナメントロジック・構造生成 ===
-        const buildTournamentTree = (teamCount) => {
+        // === シード順位生成（公式配置） ===
+        const getSeedOrder = (capacity) => {
+            let order = [0, 1];
+            while (order.length < capacity) {
+                const len = order.length;
+                const nextOrder = new Array(len * 2);
+                for (let i = 0; i < len; i++) {
+                    nextOrder[i * 2] = order[i];
+                    nextOrder[i * 2 + 1] = len * 2 - 1 - order[i];
+                }
+                order = nextOrder;
+            }
+            return order.map(x => x + 1);
+        };
+
+        // === トーナメント構造生成 ===
+        const buildTournamentTree = (teamCount, hasThirdPlace) => {
+            const capacity = Math.pow(2, Math.ceil(Math.log2(teamCount)));
+            const seeds = getSeedOrder(capacity);
             const matches = {};
-            // 初期化
-            for(let i=1; i<=teamCount; i++) {
-                matches[`m${i}`] = { 
-                    id: `m${i}`, p1: '', p2: '', 
-                    s1: { f:'', s:'', t:'' }, s2: { f:'', s:'', t:'' }, 
-                    winner: null, loser: null, time: '', official: '',
-                    nextMatch: null, nextPos: null, loserMatch: null, loserPos: null
-                };
-            }
             
-            // 1回戦のチーム名プレースホルダー
-            for(let i=1; i<=teamCount/2; i++) {
-                matches[`m${i}`].p1 = `チーム${i*2-1}`;
-                matches[`m${i}`].p2 = `チーム${i*2}`;
+            // 1回戦生成
+            let matchIndex = 1;
+            for (let i = 0; i < capacity; i += 2) {
+                const s1 = seeds[i];
+                const s2 = seeds[i+1];
+                matches[`m${matchIndex}`] = {
+                    id: `m${matchIndex}`,
+                    p1: s1 <= teamCount ? `チーム${s1}` : 'BYE',
+                    p2: s2 <= teamCount ? `チーム${s2}` : 'BYE',
+                    s1: { f:'', s:'', t:'' }, s2: { f:'', s:'', t:'' },
+                    winner: null, loser: null, time: '', official: '',
+                    nextMatch: null, nextPos: null, loserMatch: null, loserPos: null,
+                    isByeMatch: (s1 > teamCount || s2 > teamCount)
+                };
+                matchIndex++;
             }
 
+            const rounds = Math.log2(capacity);
             let prevRoundStart = 1;
-            let prevRoundCount = teamCount / 2;
-            let currentMatchId = teamCount / 2 + 1;
-            const rounds = Math.log2(teamCount);
-            
+            let prevRoundCount = capacity / 2;
+            let currentMatchId = capacity / 2 + 1;
+
+            // 2回戦以降生成
             for (let r = 1; r < rounds; r++) {
                 const currentRoundCount = prevRoundCount / 2;
                 for (let i = 0; i < currentRoundCount; i++) {
@@ -76,47 +111,70 @@
                     const p2Id = `m${prevRoundStart + i * 2 + 1}`;
                     const nextId = `m${currentMatchId}`;
                     
+                    matches[nextId] = {
+                        id: nextId, p1: '', p2: '',
+                        s1: { f:'', s:'', t:'' }, s2: { f:'', s:'', t:'' },
+                        winner: null, loser: null, time: '', official: '',
+                        nextMatch: null, nextPos: null, loserMatch: null, loserPos: null,
+                        isByeMatch: false,
+                        isFinal: r === rounds - 1
+                    };
+
                     matches[p1Id].nextMatch = nextId;
                     matches[p1Id].nextPos = 'p1';
                     matches[p2Id].nextMatch = nextId;
                     matches[p2Id].nextPos = 'p2';
                     
-                    // 準決勝の敗者は3位決定戦へ
-                    if (r === rounds - 1) {
-                        const thirdPlaceId = `m${teamCount}`;
+                    // 3位決定戦
+                    if (hasThirdPlace && r === rounds - 1) {
+                        const thirdPlaceId = `m${capacity}`;
                         matches[p1Id].loserMatch = thirdPlaceId;
                         matches[p1Id].loserPos = 'p1';
                         matches[p2Id].loserMatch = thirdPlaceId;
                         matches[p2Id].loserPos = 'p2';
+                        
+                        matches[thirdPlaceId] = {
+                            id: thirdPlaceId, p1: '', p2: '',
+                            s1: { f:'', s:'', t:'' }, s2: { f:'', s:'', t:'' },
+                            winner: null, loser: null, time: '', official: '',
+                            isThirdPlace: true, isByeMatch: false
+                        };
                     }
                     currentMatchId++;
                 }
                 prevRoundStart += prevRoundCount;
                 prevRoundCount = currentRoundCount;
             }
-            return matches;
+
+            // BYEの自動勝ち抜け処理
+            for (let i = 1; i <= capacity / 2; i++) {
+                const match = matches[`m${i}`];
+                if (match.isByeMatch) {
+                    const winner = match.p1 !== 'BYE' ? match.p1 : match.p2;
+                    match.winner = winner;
+                    if (match.nextMatch) matches[match.nextMatch][match.nextPos] = winner;
+                }
+            }
+            return { matches, capacity };
         };
 
-        // ツリーの座標計算
+        // ツリーの座標定義
         const CARD_W = 160;
-        const CARD_H = 82;
-        const GAP_X = 50;
-        const GAP_Y = 24;
-        const P1_Y_OFFSET = 28;
-        const P2_Y_OFFSET = 62;
-        const MID_Y_OFFSET = 45;
+        const CARD_H = 86;
+        const GAP_X = 40;
+        const GAP_Y = 20;
 
-        const calculateCoords = (teamCount) => {
+        const calculateCoords = (capacity, hasThirdPlace) => {
             const coords = {};
-            const rounds = Math.log2(teamCount);
+            const rounds = Math.log2(capacity);
             
-            for (let i = 0; i < teamCount / 2; i++) {
+            for (let i = 0; i < capacity / 2; i++) {
                 coords[`m${i+1}`] = { x: 0, y: i * (CARD_H + GAP_Y) };
             }
             
-            let currentMatchId = teamCount / 2 + 1;
+            let currentMatchId = capacity / 2 + 1;
             let prevRoundStart = 1;
-            let prevRoundCount = teamCount / 2;
+            let prevRoundCount = capacity / 2;
             
             for (let r = 1; r < rounds; r++) {
                 const currentRoundCount = prevRoundCount / 2;
@@ -133,27 +191,19 @@
                 prevRoundCount = currentRoundCount;
             }
             
-            // 3位決定戦
-            const finalId = `m${teamCount - 1}`;
-            const thirdPlaceId = `m${teamCount}`;
-            coords[thirdPlaceId] = {
-                x: coords[finalId].x,
-                y: coords[finalId].y + CARD_H + GAP_Y * 2
-            };
-            
+            if (hasThirdPlace) {
+                const finalId = `m${capacity - 1}`;
+                const thirdPlaceId = `m${capacity}`;
+                coords[thirdPlaceId] = { x: coords[finalId].x, y: coords[finalId].y + CARD_H + GAP_Y * 2 };
+            }
             return coords;
         };
 
-        // 線を描画するコンポーネント
-        const BracketLine = ({ x1, y1, x2, y2 }) => {
-            const midX = x1 + (x2 - x1) / 2;
-            return <path d={`M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`} fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinejoin="round" />;
-        };
-
-        // === サブコンポーネント：入力モーダル ===
+        // === サブコンポーネント：入力モーダル（スマホ対応ボトムシート） ===
         const MatchEditModal = ({ matchId, matchData, onClose, onSave }) => {
             const [data, setData] = useState(JSON.parse(JSON.stringify(matchData)));
             const [manualWinner, setManualWinner] = useState(matchData.winner);
+            const isBye = matchData.isByeMatch;
 
             const handleScore = (side, half, val) => {
                 const num = val.replace(/[^0-9]/g, '').slice(0, 2);
@@ -165,73 +215,96 @@
                 newData[side].t = (newData[side].f !== '' || newData[side].s !== '') ? (f + s).toString() : '';
                 
                 setData(newData);
-                setManualWinner(null); // スコア変更時は手動判定をリセット
+                setManualWinner(null);
             };
 
             const save = () => {
+                if (isBye) {
+                    const winnerName = data.p1 !== 'BYE' ? data.p1 : data.p2;
+                    data.winner = winnerName;
+                    onSave(matchId, data, data.p1 !== 'BYE' ? 'p1' : 'p2');
+                    return;
+                }
+
                 let finalWinner = manualWinner;
                 if (!finalWinner) {
                     const t1 = parseInt(data.s1.t);
                     const t2 = parseInt(data.s2.t);
-                    if (!isNaN(t1) && !isNaN(t2) && t1 !== t2) {
-                        finalWinner = t1 > t2 ? 'p1' : 'p2';
-                    }
+                    if (!isNaN(t1) && !isNaN(t2) && t1 !== t2) finalWinner = t1 > t2 ? 'p1' : 'p2';
                 }
                 onSave(matchId, data, finalWinner);
             };
 
+            const selectAll = (e) => e.target.select();
+
             return (
-                <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col">
-                        <div className="bg-slate-800 text-white px-4 py-3 flex justify-between items-center">
-                            <h3 className="font-bold tracking-wide">試合設定 (No.{matchId.replace('m', '')})</h3>
-                            <button onClick={onClose} className="text-xl leading-none opacity-80 hover:opacity-100">&times;</button>
+                <div className="fixed inset-0 bg-slate-900/70 z-50 flex items-end sm:items-center justify-center sm:p-4 backdrop-blur-sm transition-opacity">
+                    <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-slide-up sm:animate-none">
+                        <div className="bg-slate-800 text-white px-5 py-4 flex justify-between items-center rounded-t-2xl sm:rounded-t-xl">
+                            <h3 className="font-black tracking-wide text-lg">
+                                {isBye ? 'チーム名編集 (シード)' : `試合入力 (No.${matchId.replace('m', '')})`}
+                            </h3>
+                            <button onClick={onClose} className="text-3xl leading-none opacity-80 hover:opacity-100 p-1">&times;</button>
                         </div>
                         
-                        <div className="p-4 space-y-4">
-                            <div className="flex gap-3">
-                                <div className="flex-1">
-                                    <label className="block text-xs font-bold text-slate-500 mb-1">開始時間</label>
-                                    <input type="time" value={data.time} onChange={e => setData({...data, time: e.target.value})} className="w-full border rounded px-2 py-1.5 focus:ring-2 outline-none"/>
-                                </div>
-                                <div className="flex-1">
-                                    <label className="block text-xs font-bold text-slate-500 mb-1">役員/審判</label>
-                                    <input type="text" value={data.official} onChange={e => setData({...data, official: e.target.value})} className="w-full border rounded px-2 py-1.5 focus:ring-2 outline-none"/>
-                                </div>
-                            </div>
-
-                            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-                                <div className="flex font-bold text-[11px] text-slate-500 mb-2 border-b border-slate-200 pb-1">
-                                    <div className="w-2/5">チーム名</div>
-                                    <div className="w-1/5 text-center">前半</div>
-                                    <div className="w-1/5 text-center">後半</div>
-                                    <div className="w-1/5 text-center">合計</div>
-                                </div>
-                                
-                                {['p1', 'p2'].map((p, idx) => (
-                                    <div key={p} className={`flex items-center ${idx===0 ? 'mb-2' : ''}`}>
-                                        <div className="w-2/5 pr-2">
-                                            <input type="text" value={data[p]} onChange={e => setData({...data, [p]: e.target.value})} className="w-full border rounded px-1.5 py-1 text-sm font-bold shadow-sm focus:ring-2 outline-none"/>
-                                        </div>
-                                        <div className="w-1/5 px-0.5"><input type="tel" maxLength={2} value={data[`s${idx+1}`].f} onChange={e => handleScore(`s${idx+1}`, 'f', e.target.value)} className="w-full border rounded text-center py-1 font-bold shadow-sm outline-none focus:bg-blue-50"/></div>
-                                        <div className="w-1/5 px-0.5"><input type="tel" maxLength={2} value={data[`s${idx+1}`].s} onChange={e => handleScore(`s${idx+1}`, 's', e.target.value)} className="w-full border rounded text-center py-1 font-bold shadow-sm outline-none focus:bg-blue-50"/></div>
-                                        <div className="w-1/5 text-center font-black text-lg text-slate-800">{data[`s${idx+1}`].t || '-'}</div>
+                        <div className="p-5 sm:p-6 space-y-5 overflow-y-auto max-h-[75vh]">
+                            {!isBye && (
+                                <div className="flex gap-4">
+                                    <div className="flex-1">
+                                        <label className="block text-xs font-bold text-slate-500 mb-1.5">時間</label>
+                                        <input type="time" value={data.time} onChange={e => setData({...data, time: e.target.value})} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2.5 text-base font-bold focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"/>
                                     </div>
-                                ))}
+                                    <div className="flex-1">
+                                        <label className="block text-xs font-bold text-slate-500 mb-1.5">審判・役員</label>
+                                        <input type="text" value={data.official} onChange={e => setData({...data, official: e.target.value})} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2.5 text-base font-bold focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all" placeholder="氏名など"/>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="bg-slate-50 p-4 rounded-xl border-2 border-slate-200">
+                                {!isBye && (
+                                    <div className="flex font-bold text-xs text-slate-500 mb-3 border-b-2 border-slate-200 pb-2">
+                                        <div className="w-[45%]">チーム名</div>
+                                        <div className="w-[18%] text-center">前半</div>
+                                        <div className="w-[18%] text-center">後半</div>
+                                        <div className="w-[19%] text-center">合計</div>
+                                    </div>
+                                )}
+                                
+                                {['p1', 'p2'].map((p, idx) => {
+                                    if (isBye && data[p] === 'BYE') return null;
+                                    return (
+                                        <div key={p} className={`flex items-center ${idx===0 && !isBye ? 'mb-3' : ''}`}>
+                                            <div className={isBye ? "w-full" : "w-[45%] pr-3"}>
+                                                {isBye && <label className="block text-xs font-bold text-slate-500 mb-1.5">チーム名を入力</label>}
+                                                <input type="text" value={data[p]} onFocus={selectAll} onChange={e => setData({...data, [p]: e.target.value})} className="w-full border-2 border-slate-300 rounded-lg px-2 py-2.5 text-base font-black text-slate-800 shadow-sm focus:border-blue-500 focus:ring-2 outline-none"/>
+                                            </div>
+                                            {!isBye && (
+                                                <>
+                                                    <div className="w-[18%] px-1"><input type="tel" maxLength={2} value={data[`s${idx+1}`].f} onFocus={selectAll} onChange={e => handleScore(`s${idx+1}`, 'f', e.target.value)} placeholder="-" className="w-full border-2 border-slate-300 rounded-lg text-center py-2.5 text-lg font-black shadow-sm outline-none focus:border-blue-500 focus:bg-blue-50 transition-colors"/></div>
+                                                    <div className="w-[18%] px-1"><input type="tel" maxLength={2} value={data[`s${idx+1}`].s} onFocus={selectAll} onChange={e => handleScore(`s${idx+1}`, 's', e.target.value)} placeholder="-" className="w-full border-2 border-slate-300 rounded-lg text-center py-2.5 text-lg font-black shadow-sm outline-none focus:border-blue-500 focus:bg-blue-50 transition-colors"/></div>
+                                                    <div className="w-[19%] text-center font-black text-2xl text-slate-900 tracking-tighter">{data[`s${idx+1}`].t || '-'}</div>
+                                                </>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
 
-                            <div className="pt-2">
-                                <p className="text-[11px] font-bold text-slate-500 mb-1">勝敗の手動決定（PTや棄権の場合など）</p>
-                                <div className="flex gap-2">
-                                    <button className={`flex-1 py-1.5 rounded border text-sm font-bold transition-colors ${manualWinner === 'p1' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600'}`} onClick={() => setManualWinner(manualWinner === 'p1' ? null : 'p1')}>{data.p1 || '上'} 勝</button>
-                                    <button className={`flex-1 py-1.5 rounded border text-sm font-bold transition-colors ${manualWinner === 'p2' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600'}`} onClick={() => setManualWinner(manualWinner === 'p2' ? null : 'p2')}>{data.p2 || '下'} 勝</button>
+                            {!isBye && (
+                                <div className="pt-2">
+                                    <p className="text-xs font-bold text-slate-500 mb-2">手動判定（ペナルティスロー・棄権時など）</p>
+                                    <div className="flex gap-3">
+                                        <button className={`flex-1 py-3 rounded-lg border-2 text-base font-black transition-all ${manualWinner === 'p1' ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-[1.02]' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`} onClick={() => setManualWinner(manualWinner === 'p1' ? null : 'p1')}>{data.p1 || '上'} の勝ち</button>
+                                        <button className={`flex-1 py-3 rounded-lg border-2 text-base font-black transition-all ${manualWinner === 'p2' ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-[1.02]' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`} onClick={() => setManualWinner(manualWinner === 'p2' ? null : 'p2')}>{data.p2 || '下'} の勝ち</button>
+                                    </div>
                                 </div>
-                            </div>
+                            )}
                         </div>
 
-                        <div className="p-3 bg-slate-50 border-t flex justify-end gap-2">
-                            <button onClick={onClose} className="px-4 py-2 rounded text-sm font-bold text-slate-600 bg-white border hover:bg-slate-100">キャンセル</button>
-                            <button onClick={save} className="px-5 py-2 rounded text-sm font-bold text-white bg-slate-800 hover:bg-slate-700">保存して閉じる</button>
+                        <div className="p-4 sm:p-5 bg-slate-50 border-t-2 border-slate-200 flex gap-3 pb-8 sm:pb-5">
+                            <button onClick={onClose} className="flex-1 py-3 rounded-lg text-base font-bold text-slate-600 bg-white border-2 border-slate-300 hover:bg-slate-100">キャンセル</button>
+                            <button onClick={save} className="flex-[2] py-3 rounded-lg text-base font-black text-white bg-slate-800 shadow-md hover:bg-slate-700">保存して閉じる</button>
                         </div>
                     </div>
                 </div>
@@ -241,40 +314,47 @@
         // === メインアプリケーション ===
         const App = () => {
             const [info, setInfo] = useState({
-                title: "大会名を入力してください",
-                date: "令和 年 月 日()",
-                venue: "試合会場を入力",
-                manager: "",
-                teamCount: 8
+                title: "大会名を入力してください", date: "令和 年 月 日()", venue: "試合会場を入力", manager: "",
+                teamCount: 8, hasThirdPlace: true
             });
-            const [matches, setMatches] = useState(() => buildTournamentTree(8));
+            const [treeData, setTreeData] = useState(() => buildTournamentTree(8, true));
             const [editingId, setEditingId] = useState(null);
+            const [zoom, setZoom] = useState(1);
+            
+            // ドラッグスクロール用
+            const containerRef = useRef(null);
+            const [isDragging, setIsDragging] = useState(false);
+            const [startX, setStartX] = useState(0);
+            const [scrollLeft, setScrollLeft] = useState(0);
+            const [startY, setStartY] = useState(0);
+            const [scrollTop, setScrollTop] = useState(0);
 
-            // ロード & セーブ
+            // ローカルストレージ
             useEffect(() => {
-                const savedInfo = localStorage.getItem('hb_info_v3');
-                const savedMatches = localStorage.getItem('hb_matches_v3');
+                const savedInfo = localStorage.getItem('hb_info_v4');
+                const savedMatches = localStorage.getItem('hb_matches_v4');
                 if (savedInfo && savedMatches) {
                     setInfo(JSON.parse(savedInfo));
-                    setMatches(JSON.parse(savedMatches));
+                    setTreeData({ matches: JSON.parse(savedMatches), capacity: Math.pow(2, Math.ceil(Math.log2(JSON.parse(savedInfo).teamCount))) });
                 }
             }, []);
 
             useEffect(() => {
-                localStorage.setItem('hb_info_v3', JSON.stringify(info));
-                localStorage.setItem('hb_matches_v3', JSON.stringify(matches));
-            }, [info, matches]);
+                localStorage.setItem('hb_info_v4', JSON.stringify(info));
+                localStorage.setItem('hb_matches_v4', JSON.stringify(treeData.matches));
+            }, [info, treeData.matches]);
 
-            // チーム数変更
-            const handleTeamCount = (e) => {
-                const val = parseInt(e.target.value);
-                if (window.confirm(`${val}チームに変更します。現在入力されているすべての試合データがリセットされますがよろしいですか？`)) {
-                    setInfo({ ...info, teamCount: val });
-                    setMatches(buildTournamentTree(val));
+            // チーム数等の設定変更
+            const handleConfigChange = (key, val) => {
+                if (window.confirm("トーナメント構造を変更すると、入力済みの試合データがリセットされます。よろしいですか？")) {
+                    const newInfo = { ...info, [key]: val };
+                    setInfo(newInfo);
+                    setTreeData(buildTournamentTree(newInfo.teamCount, newInfo.hasThirdPlace));
+                    setZoom(1);
                 }
             };
 
-            // 下流の勝敗をリセットする再帰関数
+            // 勝敗連動ロジック
             const resetDownstream = (state, matchId) => {
                 const m = state[matchId];
                 if (m && m.winner) {
@@ -284,96 +364,108 @@
                 }
             };
 
-            // 勝敗を確定して次へ進める
             const advanceTournament = (state, matchId, winnerSide) => {
                 const match = state[matchId];
-                if (!match.p1 || !match.p2) return state;
+                if (!match.p1 || !match.p2 || match.p1 === 'BYE' || match.p2 === 'BYE') return state;
 
                 const winnerName = winnerSide === 'p1' ? match.p1 : match.p2;
                 const loserName = winnerSide === 'p1' ? match.p2 : match.p1;
                 
-                // 勝敗が変わった場合、または新たに決まった場合
                 if (match.winner !== winnerName) {
-                    match.winner = winnerName;
-                    match.loser = loserName;
-                    
-                    if (match.nextMatch) {
-                        state[match.nextMatch][match.nextPos] = winnerName;
-                        resetDownstream(state, match.nextMatch);
-                    }
-                    if (match.loserMatch) {
-                        state[match.loserMatch][match.loserPos] = loserName;
-                        resetDownstream(state, match.loserMatch);
-                    }
+                    match.winner = winnerName; match.loser = loserName;
+                    if (match.nextMatch) { state[match.nextMatch][match.nextPos] = winnerName; resetDownstream(state, match.nextMatch); }
+                    if (match.loserMatch) { state[match.loserMatch][match.loserPos] = loserName; resetDownstream(state, match.loserMatch); }
                 }
                 return state;
             };
 
             const handleModalSave = (matchId, updatedData, winnerSide) => {
-                setMatches(prev => {
-                    const next = JSON.parse(JSON.stringify(prev));
-                    next[matchId] = { ...next[matchId], ...updatedData };
+                setTreeData(prev => {
+                    const nextMatches = JSON.parse(JSON.stringify(prev.matches));
+                    nextMatches[matchId] = { ...nextMatches[matchId], ...updatedData };
+                    
+                    if (nextMatches[matchId].isByeMatch) {
+                        // BYE枠の名前が変わった場合の下流更新
+                        const winner = nextMatches[matchId].p1 !== 'BYE' ? nextMatches[matchId].p1 : nextMatches[matchId].p2;
+                        nextMatches[matchId].winner = winner;
+                        if (nextMatches[matchId].nextMatch) {
+                            nextMatches[nextMatches[matchId].nextMatch][nextMatches[matchId].nextPos] = winner;
+                            resetDownstream(nextMatches, nextMatches[matchId].nextMatch);
+                        }
+                        return { ...prev, matches: nextMatches };
+                    }
                     
                     if (winnerSide) {
-                        return advanceTournament(next, matchId, winnerSide);
+                        return { ...prev, matches: advanceTournament(nextMatches, matchId, winnerSide) };
                     } else {
-                        // 勝敗が取り消された場合
-                        next[matchId].winner = null;
-                        next[matchId].loser = null;
-                        if(next[matchId].nextMatch) { next[next[matchId].nextMatch][next[matchId].nextPos] = ''; resetDownstream(next, next[matchId].nextMatch); }
-                        if(next[matchId].loserMatch) { next[next[matchId].loserMatch][next[matchId].loserPos] = ''; resetDownstream(next, next[matchId].loserMatch); }
-                        return next;
+                        nextMatches[matchId].winner = null; nextMatches[matchId].loser = null;
+                        if(nextMatches[matchId].nextMatch) { nextMatches[nextMatches[matchId].nextMatch][nextMatches[matchId].nextPos] = ''; resetDownstream(nextMatches, nextMatches[matchId].nextMatch); }
+                        if(nextMatches[matchId].loserMatch) { nextMatches[nextMatches[matchId].loserMatch][nextMatches[matchId].loserPos] = ''; resetDownstream(nextMatches, nextMatches[matchId].loserMatch); }
+                        return { ...prev, matches: nextMatches };
                     }
                 });
                 setEditingId(null);
             };
 
-            // 描画用の座標計算
-            const { coords, lines, containerSize } = useMemo(() => {
-                const c = calculateCoords(info.teamCount);
-                const l = [];
-                const rounds = Math.log2(info.teamCount);
-                
-                let prevStart = 1, prevCount = info.teamCount / 2, currId = info.teamCount / 2 + 1;
-                
-                for (let r = 1; r < rounds; r++) {
-                    const currCount = prevCount / 2;
-                    for (let i = 0; i < currCount; i++) {
-                        const p1 = `m${prevStart + i * 2}`;
-                        const p2 = `m${prevStart + i * 2 + 1}`;
-                        const next = `m${currId}`;
-                        
-                        l.push(<BracketLine key={`${p1}-${next}`} x1={c[p1].x + CARD_W} y1={c[p1].y + MID_Y_OFFSET} x2={c[next].x} y2={c[next].y + P1_Y_OFFSET} />);
-                        l.push(<BracketLine key={`${p2}-${next}`} x1={c[p2].x + CARD_W} y1={c[p2].y + MID_Y_OFFSET} x2={c[next].x} y2={c[next].y + P2_Y_OFFSET} />);
-                        currId++;
-                    }
-                    prevStart += prevCount;
-                    prevCount = currCount;
-                }
+            // 描画座標計算
+            const { coords, containerSize } = useMemo(() => {
+                const c = calculateCoords(treeData.capacity, info.hasThirdPlace);
+                const rounds = Math.log2(treeData.capacity);
+                const width = rounds * (CARD_W + GAP_X) + CARD_W + 40;
+                const height = info.hasThirdPlace ? c[`m${treeData.capacity}`].y + CARD_H + 40 : c[`m${treeData.capacity-1}`].y + CARD_H + 40;
+                return { coords: c, containerSize: { width, height } };
+            }, [treeData.capacity, info.hasThirdPlace]);
 
-                const width = rounds * (CARD_W + GAP_X) + CARD_W + 20;
-                const height = c[`m${info.teamCount}`].y + CARD_H + 40;
+            // 印刷スケールの動的計算
+            useEffect(() => {
+                const scaleX = 700 / containerSize.width;
+                const scaleY = 1000 / containerSize.height;
+                const printScale = Math.min(1, scaleX, scaleY);
+                document.documentElement.style.setProperty('--print-scale', printScale);
+            }, [containerSize]);
 
-                return { coords: c, lines: l, containerSize: { width, height } };
-            }, [info.teamCount]);
+            // マウスドラッグイベント
+            const handleMouseDown = (e) => {
+                setIsDragging(true);
+                setStartX(e.pageX - containerRef.current.offsetLeft);
+                setStartY(e.pageY - containerRef.current.offsetTop);
+                setScrollLeft(containerRef.current.scrollLeft);
+                setScrollTop(containerRef.current.scrollTop);
+            };
+            const handleMouseMove = (e) => {
+                if (!isDragging) return;
+                e.preventDefault();
+                const x = e.pageX - containerRef.current.offsetLeft;
+                const y = e.pageY - containerRef.current.offsetTop;
+                containerRef.current.scrollLeft = scrollLeft - (x - startX) * 1.5;
+                containerRef.current.scrollTop = scrollTop - (y - startY) * 1.5;
+            };
 
             // 試合カードUI
             const MatchCard = ({ id, label, match }) => {
-                const isFinal = label == info.teamCount - 1;
-                const isThird = label == info.teamCount;
+                const isFinal = match.isFinal;
+                const isThird = match.isThirdPlace;
                 
+                if (match.isByeMatch) {
+                    return (
+                        <div onClick={() => setEditingId(id)} style={{ width: `${CARD_W}px`, height: `${CARD_H}px` }} className="bg-slate-100 border-2 border-slate-300 border-dashed rounded-lg overflow-hidden flex flex-col z-10 relative cursor-pointer opacity-70 hover:opacity-100 transition-opacity">
+                            <div className="h-[22px] bg-slate-200 px-2 flex items-center text-[10px] font-bold text-slate-500"><span>(No.{label}) シード枠</span></div>
+                            <div className="flex-1 flex flex-col justify-center px-3">
+                                <div className="text-[14px] font-black text-slate-800 truncate">{match.p1 !== 'BYE' ? match.p1 : match.p2}</div>
+                                <div className="text-[10px] font-bold text-slate-400 mt-0.5">※自動勝ち抜け</div>
+                            </div>
+                        </div>
+                    );
+                }
+
                 return (
-                    <div 
-                        onClick={() => setEditingId(id)}
-                        style={{ width: `${CARD_W}px`, height: `${CARD_H}px` }} 
-                        className={`bg-white border-[2px] rounded overflow-hidden shadow-sm flex flex-col z-10 relative cursor-pointer hover:border-slate-400 hover:shadow transition-all ${isFinal ? 'border-amber-400' : 'border-slate-300'}`}
-                    >
-                        {isFinal && <div className="absolute -top-4 left-0 w-full text-center text-[10px] font-black text-amber-600 tracking-widest no-print">FINAL</div>}
-                        {isThird && <div className="absolute -top-4 left-0 w-full text-center text-[10px] font-black text-slate-500 tracking-widest no-print">3rd PLACE</div>}
+                    <div onClick={() => setEditingId(id)} style={{ width: `${CARD_W}px`, height: `${CARD_H}px` }} className={`bg-white border-[2px] rounded-lg overflow-hidden shadow-sm flex flex-col z-10 relative cursor-pointer hover:border-blue-400 hover:shadow-md transition-all ${isFinal ? 'border-amber-400 ring-2 ring-amber-100' : 'border-slate-300'}`}>
+                        {isFinal && <div className="absolute -top-5 left-0 w-full text-center text-[11px] font-black text-amber-600 tracking-widest no-print">決勝戦</div>}
+                        {isThird && <div className="absolute -top-5 left-0 w-full text-center text-[11px] font-black text-slate-500 tracking-widest no-print">3位決定戦</div>}
                         
-                        <div className="h-[20px] bg-slate-100 border-b border-slate-200 px-1.5 flex justify-between items-center text-[9px] font-bold text-slate-500">
+                        <div className="h-[22px] bg-slate-50 border-b border-slate-200 px-2 flex justify-between items-center text-[10px] font-bold text-slate-500">
                             <span>{match.time} (No.{label})</span>
-                            <span>役: {match.official}</span>
+                            <span className="truncate max-w-[60px] text-right">役:{match.official}</span>
                         </div>
                         
                         {[1, 2].map(num => {
@@ -383,14 +475,10 @@
                             const s = match[`s${num}`];
                             
                             return (
-                                <div key={num} className={`h-[29px] flex items-center px-1.5 transition-colors ${num===2 ? 'border-t border-slate-200' : ''} ${isWin ? 'bg-blue-50' : isLose ? 'bg-slate-50 opacity-60' : 'bg-white'}`}>
-                                    <div className={`flex-1 text-[12px] truncate ${isWin ? 'font-black text-blue-800' : 'font-bold text-slate-800'}`}>{match[side] || <span className="text-slate-300 font-normal">未定</span>}</div>
-                                    <div className="w-[36px] text-center text-[9px] text-slate-400 font-bold tracking-tighter">
-                                        {(s.f || s.s) ? `${s.f || 0}-${s.s || 0}` : ''}
-                                    </div>
-                                    <div className={`w-[24px] text-right text-[14px] ${isWin ? 'font-black text-blue-800' : 'font-bold text-slate-800'}`}>
-                                        {s.t}
-                                    </div>
+                                <div key={num} className={`flex-1 flex items-center px-2 transition-colors ${num===2 ? 'border-t border-slate-100' : ''} ${isWin ? 'bg-blue-50/70' : isLose ? 'bg-slate-50 opacity-50' : 'bg-white'}`}>
+                                    <div className={`flex-1 text-[13px] truncate pr-1 ${isWin ? 'font-black text-blue-800' : 'font-bold text-slate-800'}`}>{match[side] || <span className="text-slate-300 font-normal">未定</span>}</div>
+                                    <div className="w-[34px] text-center text-[9px] text-slate-400 font-bold tracking-tighter">{(s.f || s.s) ? `${s.f || 0}-${s.s || 0}` : ''}</div>
+                                    <div className={`w-[26px] text-right text-[16px] ${isWin ? 'font-black text-blue-800' : 'font-bold text-slate-800'}`}>{s.t}</div>
                                 </div>
                             );
                         })}
@@ -399,93 +487,95 @@
             };
 
             return (
-                <div className="min-h-screen pb-12">
-                    {/* ===== ヘッダー部（設定・印刷） ===== */}
-                    <div className="bg-slate-800 text-white py-4 px-4 shadow-md no-print">
-                        <div className="max-w-[900px] mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-                            <h1 className="text-lg font-black tracking-widest">トーナメント結果管理</h1>
-                            <div className="flex gap-2">
-                                <button onClick={() => window.print()} className="bg-white text-slate-800 px-5 py-2 rounded text-sm font-bold shadow hover:bg-slate-100 transition">A4 印刷</button>
-                                <button onClick={() => { if(window.confirm("全データを消去しますか？")) { setMatches(buildTournamentTree(info.teamCount)); setInfo({...info, manager: "", title: "", date: "", venue: ""}) } }} className="border border-slate-600 text-slate-300 px-3 py-2 rounded text-sm font-bold hover:bg-slate-700">リセット</button>
+                <div className="min-h-screen flex flex-col">
+                    {/* ===== ヘッダー部（固定） ===== */}
+                    <div className="sticky top-0 z-40 bg-slate-800 text-white shadow-lg no-print">
+                        <div className="max-w-6xl mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-3">
+                            <h1 className="text-base md:text-lg font-black tracking-widest">ハンドボール結果管理</h1>
+                            <div className="flex gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0 hide-scrollbar">
+                                <div className="flex items-center gap-1 bg-slate-700 px-2 py-1 rounded-lg shrink-0">
+                                    <span className="text-xs font-bold text-slate-300">チーム数</span>
+                                    <select value={info.teamCount} onChange={e => handleConfigChange('teamCount', parseInt(e.target.value))} className="bg-transparent text-white font-bold outline-none cursor-pointer">
+                                        {[...Array(30)].map((_, i) => <option key={i+3} value={i+3} className="text-slate-800">{i+3}チーム</option>)}
+                                    </select>
+                                </div>
+                                <label className="flex items-center gap-1.5 bg-slate-700 px-2 py-1 rounded-lg shrink-0 cursor-pointer">
+                                    <input type="checkbox" checked={info.hasThirdPlace} onChange={e => handleConfigChange('hasThirdPlace', e.target.checked)} className="w-3.5 h-3.5"/>
+                                    <span className="text-xs font-bold text-slate-300">3位決</span>
+                                </label>
+                                <button onClick={() => window.print()} className="bg-white text-slate-800 px-4 py-1.5 rounded-lg text-sm font-black shadow hover:bg-slate-100 shrink-0">A4印刷</button>
                             </div>
                         </div>
                     </div>
 
-                    <div className={`max-w-[900px] mx-auto p-4 md:p-6 print:p-0 print:max-w-none`}>
+                    <div className="flex-1 w-full max-w-6xl mx-auto p-3 md:p-6 print:p-0 print:max-w-none flex flex-col gap-4 print:gap-2">
                         
-                        {/* ===== 大会情報入力エリア ===== */}
-                        <div className="bg-white p-5 rounded-lg shadow-sm mb-6 border border-slate-200 print-wrapper print:mb-4">
-                            <input 
-                                type="text" 
-                                value={info.title} 
-                                onChange={e => setInfo({...info, title: e.target.value})} 
-                                placeholder="大会名を入力"
-                                className="w-full text-xl md:text-2xl font-black text-center text-slate-900 border-b-2 border-slate-200 focus:border-slate-800 outline-none pb-2 mb-4 print-input-clean"
-                            />
-                            
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm font-bold text-slate-600">
-                                <div className="flex items-center gap-2 border-b border-slate-100 pb-1 print-input-clean">
-                                    <span className="w-16 shrink-0">日時：</span>
-                                    <input type="text" value={info.date} onChange={e => setInfo({...info, date: e.target.value})} className="w-full outline-none text-slate-900 print-input-clean" placeholder="令和○年○月○日" />
-                                </div>
-                                <div className="flex items-center gap-2 border-b border-slate-100 pb-1 print-input-clean">
-                                    <span className="w-16 shrink-0">会場：</span>
-                                    <input type="text" value={info.venue} onChange={e => setInfo({...info, venue: e.target.value})} className="w-full outline-none text-slate-900 print-input-clean" placeholder="体育館名など" />
-                                </div>
-                                <div className="flex justify-between items-center gap-2 pb-1">
-                                    <div className="flex items-center gap-2 border-b border-slate-100 flex-1 print-input-clean">
-                                        <span className="shrink-0 text-[11px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 print:bg-transparent print:p-0">責任者</span>
-                                        <input type="text" value={info.manager} onChange={e => setInfo({...info, manager: e.target.value})} className="w-full outline-none text-slate-900 print-input-clean" placeholder="氏名" />
-                                    </div>
-                                    <div className="no-print shrink-0">
-                                        <select value={info.teamCount} onChange={handleTeamCount} className="border border-slate-300 rounded px-2 py-1 outline-none text-slate-800 bg-white shadow-sm cursor-pointer">
-                                            <option value={4}>4チーム</option>
-                                            <option value={8}>8チーム</option>
-                                            <option value={16}>16チーム</option>
-                                        </select>
-                                    </div>
-                                </div>
+                        {/* ===== 大会情報入力 ===== */}
+                        <div className="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-slate-200 print-wrapper">
+                            <input type="text" value={info.title} onChange={e => setInfo({...info, title: e.target.value})} placeholder="大会名を入力" className="w-full text-xl md:text-2xl font-black text-center text-slate-900 border-b-2 border-slate-200 focus:border-blue-500 outline-none pb-2 mb-4 print-input-clean"/>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-6 text-sm font-bold text-slate-600">
+                                <div className="flex items-center gap-2 border-b border-slate-100 pb-1.5 print-input-clean"><span className="shrink-0 text-xs">日時:</span><input type="text" value={info.date} onChange={e => setInfo({...info, date: e.target.value})} className="w-full outline-none text-slate-900 print-input-clean" placeholder="令和○年○月○日" /></div>
+                                <div className="flex items-center gap-2 border-b border-slate-100 pb-1.5 print-input-clean"><span className="shrink-0 text-xs">会場:</span><input type="text" value={info.venue} onChange={e => setInfo({...info, venue: e.target.value})} className="w-full outline-none text-slate-900 print-input-clean" placeholder="体育館名など" /></div>
+                                <div className="flex items-center gap-2 border-b border-slate-100 pb-1.5 print-input-clean"><span className="shrink-0 text-xs">責任者:</span><input type="text" value={info.manager} onChange={e => setInfo({...info, manager: e.target.value})} className="w-full outline-none text-slate-900 print-input-clean" placeholder="氏名" /></div>
                             </div>
                         </div>
 
-                        {/* ===== トーナメントツリー描画エリア ===== */}
-                        {/* 印刷用スケールクラスをチーム数に応じて付与 */}
-                        <div className={`bg-white rounded-lg shadow-sm border border-slate-200 p-6 overflow-x-auto print-wrapper scale-${info.teamCount}`}>
-                            <div className="text-[10px] text-slate-400 font-bold mb-4 no-print flex items-center gap-1.5 bg-blue-50 text-blue-700 px-3 py-2 rounded-md border border-blue-100 max-w-max">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"></path></svg>
-                                試合カードをタップして「チーム名」「スコア」「時間」を入力してください。
+                        {/* ===== トーナメント描画エリア ===== */}
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex-1 flex flex-col overflow-hidden print-wrapper">
+                            
+                            {/* 操作ツールバー */}
+                            <div className="bg-slate-50 border-b border-slate-200 p-2 md:p-3 flex justify-between items-center no-print">
+                                <div className="text-[10px] md:text-xs text-blue-700 font-bold flex items-center gap-1.5 bg-blue-100/50 px-2 py-1.5 rounded-lg">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"></path></svg>
+                                    <span className="hidden md:inline">カードをタップして編集 / 画面をドラッグして移動</span>
+                                    <span className="md:hidden">タップで編集 / スワイプで移動</span>
+                                </div>
+                                <div className="flex items-center gap-1 bg-white border border-slate-300 rounded-lg p-0.5 shadow-sm">
+                                    <button onClick={() => setZoom(z => Math.max(0.5, z - 0.1))} className="w-8 h-8 flex justify-center items-center text-slate-600 hover:bg-slate-100 rounded font-bold text-lg">−</button>
+                                    <span className="text-xs font-bold text-slate-500 w-10 text-center">{Math.round(zoom * 100)}%</span>
+                                    <button onClick={() => setZoom(z => Math.min(2, z + 0.1))} className="w-8 h-8 flex justify-center items-center text-slate-600 hover:bg-slate-100 rounded font-bold text-lg">＋</button>
+                                </div>
                             </div>
 
-                            <div className="relative mx-auto print:mx-0" style={{ width: containerSize.width, height: containerSize.height }}>
-                                <svg className="absolute inset-0 pointer-events-none" style={{ width: '100%', height: '100%', zIndex: 0 }}>
-                                    {lines}
-                                </svg>
-                                
-                                {Object.values(matches).map(m => {
-                                    const num = m.id.replace('m', '');
-                                    const isFinal = num == info.teamCount - 1;
-                                    const isThird = num == info.teamCount;
+                            {/* スクロールコンテナ */}
+                            <div 
+                                ref={containerRef}
+                                className="flex-1 overflow-auto custom-scrollbar p-6 print:p-0 cursor-grab active:cursor-grabbing print-scale-container relative"
+                                onMouseDown={handleMouseDown} onMouseLeave={() => setIsDragging(false)} onMouseUp={() => setIsDragging(false)} onMouseMove={handleMouseMove}
+                            >
+                                <div className="relative mx-auto print:mx-0 transition-transform origin-top-left" style={{ width: containerSize.width, height: containerSize.height, transform: `scale(${zoom})`, transformOrigin: 'top center' }}>
                                     
-                                    return (
+                                    {/* 線の描画 */}
+                                    <svg className="absolute inset-0 pointer-events-none" style={{ width: '100%', height: '100%', zIndex: 0 }}>
+                                        {Object.values(treeData.matches).map(m => {
+                                            if (!m.nextMatch) return null;
+                                            const c1 = coords[m.id];
+                                            const cNext = coords[m.nextMatch];
+                                            const x1 = c1.x + CARD_W;
+                                            const y1 = c1.y + CARD_H / 2;
+                                            const x2 = cNext.x;
+                                            const y2 = cNext.y + (m.nextPos === 'p1' ? 24 : CARD_H - 24); // 上下位置調整
+                                            const midX = x1 + (x2 - x1) / 2;
+                                            return <path key={`l-${m.id}`} d={`M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`} fill="none" stroke="#cbd5e1" strokeWidth="2.5" strokeLinejoin="round" />;
+                                        })}
+                                    </svg>
+                                    
+                                    {/* カードの描画 */}
+                                    {Object.values(treeData.matches).map(m => (
                                         <div key={m.id} className="absolute" style={{ left: coords[m.id].x, top: coords[m.id].y }}>
-                                            {isFinal && <div className="hidden print:block absolute -top-4 left-0 w-full text-center text-[10px] font-black text-black tracking-widest">決勝戦</div>}
-                                            {isThird && <div className="hidden print:block absolute -top-4 left-0 w-full text-center text-[10px] font-black text-black tracking-widest">3位決定戦</div>}
-                                            <MatchCard id={m.id} label={num} match={m} />
+                                            {m.isFinal && <div className="hidden print:block absolute -top-4 left-0 w-full text-center text-[10px] font-black tracking-widest text-black">決勝戦</div>}
+                                            {m.isThirdPlace && <div className="hidden print:block absolute -top-4 left-0 w-full text-center text-[10px] font-black tracking-widest text-black">3位決定戦</div>}
+                                            <MatchCard id={m.id} label={m.id.replace('m', '')} match={m} />
                                         </div>
-                                    );
-                                })}
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* モーダル表示 */}
+                    {/* モーダル */}
                     {editingId && (
-                        <MatchEditModal 
-                            matchId={editingId} 
-                            matchData={matches[editingId]} 
-                            onClose={() => setEditingId(null)} 
-                            onSave={handleModalSave} 
-                        />
+                        <MatchEditModal matchId={editingId} matchData={treeData.matches[editingId]} onClose={() => setEditingId(null)} onSave={handleModalSave} />
                     )}
                 </div>
             );
