@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>【女子の部】那覇地区夏季大会速報</title>
     
-    <!-- 最小限のライブラリ読み込み -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -14,13 +13,14 @@
     <style>
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            background-color: #f8fafc;
+            background-color: #f1f5f9;
             margin: 0;
-            overflow-x: hidden;
+            padding: 0;
             -webkit-tap-highlight-color: transparent;
         }
+        /* スコア入力時にスマホがズームするのを防ぐ */
         input[type="tel"] {
-            font-size: 16px; /* スマホで自動ズームさせないため */
+            font-size: 16px !important;
         }
     </style>
 </head>
@@ -32,44 +32,46 @@
 
         const ADMIN_PASSWORD = "naha";
 
-        // レイアウト設定（超コンパクト）
-        const W = 96;  // カード幅
-        const H = 48;  // カード高さ
-        const GAP = 16;
-        const Y_STEP = 72;
+        // ==========================================
+        // 描画キャンバスの論理サイズ（アスペクト比計算用）
+        // ==========================================
+        const CANVAS_W = 400;
+        const CANVAS_H = 310;
+        const CARD_W = 62;
+        const CARD_H = 44;
 
+        // ノードの論理座標 (cx: 中心X, y: 上端Y)
         const NODES = {
-            seed1: { x: 0, y: 0, label: '神森', isSeed: true },
-            A3:    { x: W + GAP, y: 0, label: 'A3' },
-            B6:    { x: (W + GAP) * 2, y: 0, label: 'B6' },
-            A7:    { x: (W + GAP) * 3, y: 0, label: 'A7' },
-            B3:    { x: (W + GAP) * 4, y: 0, label: 'B3' },
-            seed2: { x: (W + GAP) * 5, y: 0, label: '仲西', isSeed: true },
+            seed1: { cx: 35,  y: 250, label: '神森', isSeed: true },
+            A3:    { cx: 101, y: 250, label: 'A3' },
+            B6:    { cx: 167, y: 250, label: 'B6' },
+            A7:    { cx: 233, y: 250, label: 'A7' },
+            B3:    { cx: 299, y: 250, label: 'B3' },
+            seed2: { cx: 365, y: 250, label: '仲西', isSeed: true },
             
-            A6:    { x: (0 + W + GAP) / 2, y: Y_STEP, label: 'A6' },
-            B7:    { x: ((W + GAP)*4 + (W + GAP)*5) / 2, y: Y_STEP, label: 'B7' },
+            A6:    { cx: 68,  y: 170, label: 'A6' },
+            B7:    { cx: 332, y: 170, label: 'B7' },
             
-            あ1:   { x: ((0 + W + GAP)/2 + (W + GAP)*2) / 2, y: Y_STEP * 2, label: 'あ1' },
-            い1:   { x: ((W + GAP)*3 + ((W + GAP)*4 + (W + GAP)*5)/2) / 2, y: Y_STEP * 2, label: 'い1' },
+            あ1:   { cx: 117.5, y: 90, label: 'あ1' },
+            い1:   { cx: 282.5, y: 90, label: 'い1' },
             
-            あ3:   { x: (((0 + W + GAP)/2 + (W + GAP)*2)/2 + ((W + GAP)*3 + ((W + GAP)*4 + (W + GAP)*5)/2)/2) / 2, y: Y_STEP * 3, label: 'あ3(決勝)' }
+            あ3:   { cx: 200,   y: 10, label: 'あ3(決勝)' }
         };
 
         const CONNECTIONS = [
             { from: 'seed1', to: 'A6' },
-            { from: 'A3', to: 'A6' },
-            { from: 'A6', to: 'あ1' },
-            { from: 'B6', to: 'あ1' },
-            { from: 'あ1', to: 'あ3' },
-            { from: 'A7', to: 'い1' },
-            { from: 'B3', to: 'B7' },
+            { from: 'A3',    to: 'A6' },
+            { from: 'A6',    to: 'あ1' },
+            { from: 'B6',    to: 'あ1' },
+            { from: 'あ1',   to: 'あ3' },
+            { from: 'A7',    to: 'い1' },
+            { from: 'B3',    to: 'B7' },
             { from: 'seed2', to: 'B7' },
-            { from: 'B7', to: 'い1' },
-            { from: 'い1', to: 'あ3' }
+            { from: 'B7',    to: 'い1' },
+            { from: 'い1',   to: 'あ3' }
         ];
 
         function App() {
-            // ステート
             const [matches, setMatches] = useState({
                 A3: { s1: '', s2: '', winner: null },
                 B6: { s1: '', s2: '', winner: null },
@@ -83,33 +85,19 @@
             });
             const [isAdmin, setIsAdmin] = useState(false);
             const [editingId, setEditingId] = useState(null);
-            const [scale, setScale] = useState(1);
 
-            // データ読み込みと保存
             useEffect(() => {
-                const saved = localStorage.getItem('naha_hb_v4');
+                const saved = localStorage.getItem('naha_hb_v5');
                 if (saved) setMatches(JSON.parse(saved));
             }, []);
 
             useEffect(() => {
-                localStorage.setItem('naha_hb_v4', JSON.stringify(matches));
+                localStorage.setItem('naha_hb_v5', JSON.stringify(matches));
             }, [matches]);
 
-            // スマホ画面への自動フィット処理
-            useEffect(() => {
-                const handleResize = () => {
-                    // 全体幅(約660px)が画面に収まるようにスケールを計算
-                    const newScale = Math.min(1, window.innerWidth / 680);
-                    setScale(newScale);
-                };
-                handleResize();
-                window.addEventListener('resize', handleResize);
-                return () => window.removeEventListener('resize', handleResize);
-            }, []);
-
-            // チーム名取得ロジック
+            // 勝ち上がりチーム名の取得
             const getTeam = (id, isP1) => {
-                const w = (matchId) => matches[matchId].winner;
+                const w = (matchId) => matches[matchId]?.winner || null;
                 if (id === 'A3') return isP1 ? '昭薬附' : '石田';
                 if (id === 'B6') return isP1 ? 'コラソン' : '浦西';
                 if (id === 'A7') return isP1 ? '浦添' : 'ITS';
@@ -129,7 +117,7 @@
                 if (isAdmin) {
                     setIsAdmin(false);
                 } else {
-                    const pass = prompt("管理者パスワードを入力してください");
+                    const pass = prompt("パスワードを入力してください");
                     if (pass === ADMIN_PASSWORD) setIsAdmin(true);
                     else if (pass !== null) alert("パスワードが違います");
                 }
@@ -150,12 +138,14 @@
                 if (!isNaN(n1) && !isNaN(n2)) {
                     if (n1 > n2) winner = p1;
                     else if (n2 > n1) winner = p2;
-                    else winner = confirm(`${p1} の勝ちにしますか？（キャンセルで ${p2} の勝ち）`) ? p1 : p2;
+                    else {
+                        winner = window.confirm(`${p1} を勝者にしますか？\n(キャンセルで ${p2} の勝ち)`) ? p1 : p2;
+                    }
                 }
 
                 const newMatches = { ...matches, [id]: { s1, s2, winner } };
                 
-                // 勝者がリセットされたら下流もリセット
+                // 勝者がリセットされた場合、その先の試合結果もクリアする
                 if (!winner) {
                     const resetDownstream = (currentId) => {
                         const conn = CONNECTIONS.find(c => c.from === currentId);
@@ -174,37 +164,40 @@
             return (
                 <div className="flex flex-col min-h-screen">
                     {/* ヘッダー */}
-                    <header className="bg-slate-800 text-white p-3 flex justify-between items-center shadow-md">
-                        <div>
-                            <h1 className="text-sm font-bold">那覇地区夏季大会 (女子)</h1>
-                        </div>
+                    <header className="bg-slate-800 text-white px-4 py-3 flex justify-between items-center shadow sticky top-0 z-10">
+                        <h1 className="text-sm font-bold tracking-wider">那覇地区夏季大会 (女子)</h1>
                         <button 
                             onClick={handleAuth}
-                            className={`px-3 py-1 text-xs font-bold rounded ${isAdmin ? 'bg-emerald-500 text-white' : 'bg-slate-600 text-slate-200'}`}
+                            className={`px-3 py-1.5 text-xs font-bold rounded-full ${isAdmin ? 'bg-emerald-500 text-white' : 'bg-slate-600 text-slate-200'}`}
                         >
                             {isAdmin ? '🔓 編集モード' : '🔒 閲覧モード'}
                         </button>
                     </header>
 
-                    {/* トーナメント表エリア */}
-                    <main className="flex-1 relative overflow-hidden flex justify-center mt-4">
+                    {/* トーナメント描画エリア */}
+                    <main className="flex-1 w-full flex flex-col items-center pt-4 pb-8 px-2">
+                        
+                        {/* レスポンシブコンテナ（画面幅に合わせて自動縮尺） */}
                         <div 
-                            className="relative origin-top transition-transform"
-                            style={{ width: 660, height: 350, transform: `scale(${scale})` }}
+                            className="w-full max-w-[500px] relative bg-white shadow-sm rounded-xl border border-slate-200 overflow-hidden" 
+                            style={{ aspectRatio: `${CANVAS_W} / ${CANVAS_H}` }}
                         >
-                            {/* 線の描画 */}
-                            <svg className="absolute inset-0 pointer-events-none" width="100%" height="100%">
+                            {/* 線の描画 (SVG) */}
+                            <svg viewBox={`0 0 ${CANVAS_W} ${CANVAS_H}`} className="absolute inset-0 w-full h-full">
                                 {CONNECTIONS.map((c, i) => {
                                     const fromNode = NODES[c.from];
                                     const toNode = NODES[c.to];
-                                    const startX = fromNode.x + W / 2;
-                                    const startY = fromNode.y + H;
-                                    const endX = toNode.x + W / 2;
-                                    const endY = toNode.y;
+                                    
+                                    const startX = fromNode.cx;
+                                    const startY = fromNode.y;
+                                    const endX = toNode.cx;
+                                    const endY = toNode.y + CARD_H; // 親ノードの下端
+                                    
                                     const midY = startY + (endY - startY) / 2;
 
+                                    // 勝者の線は赤くする
                                     const isWinnerPath = c.from.startsWith('seed') || (matches[c.from] && matches[c.from].winner);
-                                    const color = isWinnerPath ? "#dc2626" : "#cbd5e1";
+                                    const color = isWinnerPath ? "#ef4444" : "#cbd5e1";
                                     const strokeW = isWinnerPath ? "2.5" : "1.5";
 
                                     return (
@@ -217,11 +210,17 @@
                                 })}
                             </svg>
 
-                            {/* ノードの描画 */}
+                            {/* カードの描画 (HTML絶対配置) */}
                             {Object.entries(NODES).map(([id, node]) => {
+                                // 座標をパーセント(%)に変換して配置することで絶対崩れない
+                                const left = `${((node.cx - CARD_W / 2) / CANVAS_W) * 100}%`;
+                                const top = `${(node.y / CANVAS_H) * 100}%`;
+                                const width = `${(CARD_W / CANVAS_W) * 100}%`;
+                                const height = `${(CARD_H / CANVAS_H) * 100}%`;
+
                                 if (node.isSeed) {
                                     return (
-                                        <div key={id} className="absolute bg-white border-2 border-red-500 rounded text-center font-bold text-red-600 shadow-sm flex items-center justify-center text-xs" style={{ left: node.x, top: node.y, width: W, height: H }}>
+                                        <div key={id} className="absolute flex items-center justify-center font-bold text-red-600 tracking-widest" style={{ left, top, width, height, fontSize: '11px' }}>
                                             {node.label}
                                         </div>
                                     );
@@ -236,62 +235,70 @@
                                     <div 
                                         key={id} 
                                         onClick={() => handleCardClick(id)}
-                                        className={`absolute bg-white border border-slate-300 rounded flex flex-col text-[11px] shadow-sm overflow-hidden ${isAdmin ? 'cursor-pointer hover:border-blue-400' : ''}`}
-                                        style={{ left: node.x, top: node.y, width: W, height: H }}
+                                        className={`absolute bg-white border border-slate-300 rounded flex flex-col overflow-hidden shadow-sm ${isAdmin ? 'cursor-pointer active:bg-slate-50' : ''}`}
+                                        style={{ left, top, width, height }}
                                     >
-                                        <div className="bg-slate-100 text-center text-[9px] font-bold text-slate-500 py-0.5 border-b border-slate-200">
+                                        <div className="bg-slate-100 text-center font-bold text-slate-500 border-b border-slate-200" style={{ fontSize: '8px', padding: '1px 0' }}>
                                             {node.label}
                                         </div>
-                                        <div className={`flex-1 flex px-1.5 items-center justify-between ${w && w === p1 ? 'bg-red-50' : ''}`}>
-                                            <span className={`truncate w-14 ${w && w === p1 ? 'font-bold text-red-600' : 'text-slate-700'}`}>{p1 || '-'}</span>
-                                            <span className={`font-bold ${w && w === p1 ? 'text-red-600' : 'text-slate-900'}`}>{match.s1}</span>
+                                        <div className={`flex-1 flex px-1 items-center justify-between ${w && w === p1 ? 'bg-red-50' : ''}`}>
+                                            <span className={`truncate ${w && w === p1 ? 'font-bold text-red-600' : 'text-slate-700'}`} style={{ width: '65%', fontSize: '10px' }}>{p1 || '-'}</span>
+                                            <span className={`font-bold ${w && w === p1 ? 'text-red-600' : 'text-slate-900'}`} style={{ fontSize: '11px' }}>{match.s1}</span>
                                         </div>
-                                        <div className={`flex-1 flex px-1.5 items-center justify-between border-t border-slate-100 ${w && w === p2 ? 'bg-red-50' : ''}`}>
-                                            <span className={`truncate w-14 ${w && w === p2 ? 'font-bold text-red-600' : 'text-slate-700'}`}>{p2 || '-'}</span>
-                                            <span className={`font-bold ${w && w === p2 ? 'text-red-600' : 'text-slate-900'}`}>{match.s2}</span>
+                                        <div className={`flex-1 flex px-1 items-center justify-between border-t border-slate-100 ${w && w === p2 ? 'bg-red-50' : ''}`}>
+                                            <span className={`truncate ${w && w === p2 ? 'font-bold text-red-600' : 'text-slate-700'}`} style={{ width: '65%', fontSize: '10px' }}>{p2 || '-'}</span>
+                                            <span className={`font-bold ${w && w === p2 ? 'text-red-600' : 'text-slate-900'}`} style={{ fontSize: '11px' }}>{match.s2}</span>
                                         </div>
                                     </div>
                                 );
                             })}
                         </div>
+
+                        <p className="text-center text-slate-400 text-xs mt-6 font-bold">
+                            {isAdmin ? 'カードをタップしてスコアを入力' : '大会本部の速報システム'}
+                        </p>
                     </main>
 
-                    {/* スコア入力モーダル（シンプル版） */}
+                    {/* スコア入力モーダル */}
                     {editingId && (() => {
                         const p1 = getTeam(editingId, true);
                         const p2 = getTeam(editingId, false);
+                        
                         if (!p1 || !p2) {
                             return (
-                                <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4">
-                                    <div className="bg-white p-6 rounded-lg text-center shadow-xl">
-                                        <p className="font-bold mb-4 text-slate-700">対戦カードが未確定です</p>
-                                        <button onClick={() => setEditingId(null)} className="px-6 py-2 bg-slate-200 rounded font-bold">閉じる</button>
+                                <div className="fixed inset-0 bg-slate-900/40 flex items-center justify-center p-4 z-50">
+                                    <div className="bg-white p-6 rounded-xl text-center shadow-2xl w-full max-w-xs">
+                                        <p className="font-bold mb-4 text-slate-700">対戦カードが未確定です<br/>前の試合結果を入力してください</p>
+                                        <button onClick={() => setEditingId(null)} className="w-full py-3 bg-slate-200 text-slate-700 rounded-lg font-bold">閉じる</button>
                                     </div>
                                 </div>
                             );
                         }
                         
                         return (
-                            <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-                                <div className="bg-white w-full max-w-sm rounded-lg shadow-xl overflow-hidden">
-                                    <div className="bg-slate-800 text-white px-4 py-3 font-bold text-sm">
-                                        {NODES[editingId].label} スコア入力
+                            <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 z-50">
+                                <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden">
+                                    <div className="bg-slate-800 text-white px-5 py-4 font-bold text-center tracking-widest">
+                                        {NODES[editingId].label} 試合結果
                                     </div>
                                     <form onSubmit={(e) => {
                                         e.preventDefault();
                                         handleSave(editingId, e.target.s1.value, e.target.s2.value);
-                                    }} className="p-4 space-y-4">
-                                        <div className="flex items-center justify-between bg-slate-50 p-3 rounded border">
-                                            <span className="font-bold text-slate-800">{p1}</span>
-                                            <input name="s1" type="tel" defaultValue={matches[editingId].s1} className="w-16 text-center text-xl font-bold border rounded p-1" autoFocus/>
+                                    }} className="p-6">
+                                        
+                                        <div className="flex items-center justify-between bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4">
+                                            <span className="font-bold text-slate-800 text-lg w-1/2 truncate">{p1}</span>
+                                            <input name="s1" type="tel" defaultValue={matches[editingId].s1} className="w-20 text-center text-2xl font-black border-2 border-slate-300 rounded-lg p-2 focus:border-blue-500 outline-none" autoFocus/>
                                         </div>
-                                        <div className="flex items-center justify-between bg-slate-50 p-3 rounded border">
-                                            <span className="font-bold text-slate-800">{p2}</span>
-                                            <input name="s2" type="tel" defaultValue={matches[editingId].s2} className="w-16 text-center text-xl font-bold border rounded p-1"/>
+                                        
+                                        <div className="flex items-center justify-between bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6">
+                                            <span className="font-bold text-slate-800 text-lg w-1/2 truncate">{p2}</span>
+                                            <input name="s2" type="tel" defaultValue={matches[editingId].s2} className="w-20 text-center text-2xl font-black border-2 border-slate-300 rounded-lg p-2 focus:border-blue-500 outline-none"/>
                                         </div>
-                                        <div className="flex gap-2 pt-2">
-                                            <button type="button" onClick={() => setEditingId(null)} className="flex-1 py-2 bg-slate-200 font-bold rounded">キャンセル</button>
-                                            <button type="submit" className="flex-1 py-2 bg-blue-600 text-white font-bold rounded shadow">保存</button>
+
+                                        <div className="flex gap-3">
+                                            <button type="button" onClick={() => setEditingId(null)} className="flex-1 py-3.5 bg-white text-slate-600 font-bold rounded-xl border border-slate-300">キャンセル</button>
+                                            <button type="submit" className="flex-[2] py-3.5 bg-blue-600 text-white font-bold rounded-xl shadow-md">保存する</button>
                                         </div>
                                     </form>
                                 </div>
