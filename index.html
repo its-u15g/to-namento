@@ -33,43 +33,37 @@
         const ADMIN_PASSWORD = "naha";
 
         // ==========================================
-        // 描画キャンバスの論理サイズ（アスペクト比計算用）
+        // チームとトーナメントの完全な座標定義（SVG描画用）
         // ==========================================
-        const CANVAS_W = 400;
-        const CANVAS_H = 310;
-        const CARD_W = 62;
-        const CARD_H = 44;
-
-        // ノードの論理座標 (cx: 中心X, y: 上端Y)
-        const NODES = {
-            seed1: { cx: 35,  y: 250, label: '神森', isSeed: true },
-            A3:    { cx: 101, y: 250, label: 'A3' },
-            B6:    { cx: 167, y: 250, label: 'B6' },
-            A7:    { cx: 233, y: 250, label: 'A7' },
-            B3:    { cx: 299, y: 250, label: 'B3' },
-            seed2: { cx: 365, y: 250, label: '仲西', isSeed: true },
-            
-            A6:    { cx: 68,  y: 170, label: 'A6' },
-            B7:    { cx: 332, y: 170, label: 'B7' },
-            
-            あ1:   { cx: 117.5, y: 90, label: 'あ1' },
-            い1:   { cx: 282.5, y: 90, label: 'い1' },
-            
-            あ3:   { cx: 200,   y: 10, label: 'あ3(決勝)' }
-        };
-
-        const CONNECTIONS = [
-            { from: 'seed1', to: 'A6' },
-            { from: 'A3',    to: 'A6' },
-            { from: 'A6',    to: 'あ1' },
-            { from: 'B6',    to: 'あ1' },
-            { from: 'あ1',   to: 'あ3' },
-            { from: 'A7',    to: 'い1' },
-            { from: 'B3',    to: 'B7' },
-            { from: 'seed2', to: 'B7' },
-            { from: 'B7',    to: 'い1' },
-            { from: 'い1',   to: 'あ3' }
+        const TEAMS = [
+            { name: '神森', x: 50 },
+            { name: '昭薬附', x: 130 },
+            { name: '石田', x: 210 },
+            { name: 'コラソン', x: 310 },
+            { name: '浦西', x: 390 },
+            { name: '浦添', x: 510 },
+            { name: 'ＩＴＳ', x: 590 },
+            { name: '港川', x: 690 },
+            { name: '松島', x: 770 },
+            { name: '仲西', x: 850 },
         ];
+
+        // 試合の線とクリック領域の定義
+        // y: 横線の高さ, ly/ry: 下から伸びてくる縦線の始点, uy: 上へ伸びる縦線の終点
+        const MATCH_DEFS = {
+            A3: { id: 'A3', lx: 130, rx: 210, cx: 170, y: 760, ly: 940, ry: 940, uy: 580, label: 'A3', inL: null, inR: null },
+            B6: { id: 'B6', lx: 310, rx: 390, cx: 350, y: 760, ly: 940, ry: 940, uy: 400, label: 'B6', inL: null, inR: null },
+            A7: { id: 'A7', lx: 510, rx: 590, cx: 550, y: 760, ly: 940, ry: 940, uy: 400, label: 'A7', inL: null, inR: null },
+            B3: { id: 'B3', lx: 690, rx: 770, cx: 730, y: 760, ly: 940, ry: 940, uy: 580, label: 'B3', inL: null, inR: null },
+          
+            A6: { id: 'A6', lx: 50,  rx: 170, cx: 110, y: 580, ly: 940, ry: 760, uy: 400, label: 'A6', inL: null, inR: 'A3' },
+            B7: { id: 'B7', lx: 730, rx: 850, cx: 790, y: 580, ly: 760, ry: 940, uy: 400, label: 'B7', inL: 'B3', inR: null },
+          
+            あ1: { id: 'あ1', lx: 110, rx: 350, cx: 230, y: 400, ly: 580, ry: 760, uy: 220, label: 'あ1', inL: 'A6', inR: 'B6' },
+            い1: { id: 'い1', lx: 550, rx: 790, cx: 670, y: 400, ly: 760, ry: 580, uy: 220, label: 'い1', inL: 'A7', inR: 'B7' },
+          
+            あ3: { id: 'あ3', lx: 230, rx: 670, cx: 450, y: 220, ly: 400, ry: 400, uy: 100, label: 'あ3(決勝)', inL: 'あ1', inR: 'い1' },
+        };
 
         function App() {
             const [matches, setMatches] = useState({
@@ -87,29 +81,35 @@
             const [editingId, setEditingId] = useState(null);
 
             useEffect(() => {
-                const saved = localStorage.getItem('naha_hb_v5');
+                const saved = localStorage.getItem('naha_hb_v6');
                 if (saved) setMatches(JSON.parse(saved));
             }, []);
 
             useEffect(() => {
-                localStorage.setItem('naha_hb_v5', JSON.stringify(matches));
+                localStorage.setItem('naha_hb_v6', JSON.stringify(matches));
             }, [matches]);
 
-            // 勝ち上がりチーム名の取得
-            const getTeam = (id, isP1) => {
-                const w = (matchId) => matches[matchId]?.winner || null;
-                if (id === 'A3') return isP1 ? '昭薬附' : '石田';
-                if (id === 'B6') return isP1 ? 'コラソン' : '浦西';
-                if (id === 'A7') return isP1 ? '浦添' : 'ITS';
-                if (id === 'B3') return isP1 ? '港川' : '松島';
+            // 勝者に基づいて表示するチーム名を取得する再帰関数
+            const getTeam = (id, isLeft) => {
+                const w = (mId) => {
+                    const m = matches[mId];
+                    if (!m || !m.winner) return null;
+                    return m.winner === 'left' ? getTeam(mId, true) : getTeam(mId, false);
+                };
                 
-                if (id === 'A6') return isP1 ? '神森' : w('A3');
-                if (id === 'B7') return isP1 ? w('B3') : '仲西';
+                if (id === 'A3') return isLeft ? '昭薬附' : '石田';
+                if (id === 'B6') return isLeft ? 'コラソン' : '浦西';
+                if (id === 'A7') return isLeft ? '浦添' : 'ＩＴＳ';
+                if (id === 'B3') return isLeft ? '港川' : '松島';
                 
-                if (id === 'あ1') return isP1 ? w('A6') : w('B6');
-                if (id === 'い1') return isP1 ? w('A7') : w('B7');
+                if (id === 'A6') return isLeft ? '神森' : (w('A3') || 'A3勝者');
+                if (id === 'B7') return isLeft ? (w('B3') || 'B3勝者') : '仲西';
                 
-                if (id === 'あ3') return isP1 ? w('あ1') : w('い1');
+                if (id === 'あ1') return isLeft ? (w('A6') || 'A6勝者') : (w('B6') || 'B6勝者');
+                if (id === 'い1') return isLeft ? (w('A7') || 'A7勝者') : (w('B7') || 'B7勝者');
+                
+                if (id === 'あ3') return isLeft ? (w('あ1') || 'あ1勝者') : (w('い1') || 'い1勝者');
+                
                 return null;
             };
 
@@ -128,6 +128,17 @@
                 setEditingId(id);
             };
 
+            // 下流の試合結果をリセットする再帰関数
+            const resetDownstream = (currentId, newMatches) => {
+                for (const key of Object.keys(MATCH_DEFS)) {
+                    const def = MATCH_DEFS[key];
+                    if (def.inL === currentId || def.inR === currentId) {
+                        newMatches[key] = { s1: '', s2: '', winner: null };
+                        resetDownstream(key, newMatches);
+                    }
+                }
+            };
+
             const handleSave = (id, s1, s2) => {
                 const p1 = getTeam(id, true);
                 const p2 = getTeam(id, false);
@@ -136,140 +147,131 @@
                 const n1 = parseInt(s1);
                 const n2 = parseInt(s2);
                 if (!isNaN(n1) && !isNaN(n2)) {
-                    if (n1 > n2) winner = p1;
-                    else if (n2 > n1) winner = p2;
+                    if (n1 > n2) winner = 'left';
+                    else if (n2 > n1) winner = 'right';
                     else {
-                        winner = window.confirm(`${p1} を勝者にしますか？\n(キャンセルで ${p2} の勝ち)`) ? p1 : p2;
+                        winner = window.confirm(`${p1} を勝者にしますか？\n(キャンセルで ${p2} の勝ち)`) ? 'left' : 'right';
                     }
                 }
 
                 const newMatches = { ...matches, [id]: { s1, s2, winner } };
                 
-                // 勝者がリセットされた場合、その先の試合結果もクリアする
+                // 勝者がクリアされた場合、連動して先の試合もクリアする
                 if (!winner) {
-                    const resetDownstream = (currentId) => {
-                        const conn = CONNECTIONS.find(c => c.from === currentId);
-                        if (conn) {
-                            newMatches[conn.to] = { s1: '', s2: '', winner: null };
-                            resetDownstream(conn.to);
-                        }
-                    };
-                    resetDownstream(id);
+                    resetDownstream(id, newMatches);
                 }
                 
                 setMatches(newMatches);
                 setEditingId(null);
             };
 
+            const champion = matches['あ3'].winner;
+
             return (
-                <div className="flex flex-col min-h-screen">
-                    {/* ヘッダー */}
-                    <header className="bg-slate-800 text-white px-4 py-3 flex justify-between items-center shadow sticky top-0 z-10">
-                        <h1 className="text-sm font-bold tracking-wider">那覇地区夏季大会 (女子)</h1>
+                <div className="w-full max-w-3xl mx-auto bg-white min-h-screen shadow-xl pb-10">
+                    
+                    {/* シンプルなヘッダー */}
+                    <header className="bg-slate-900 text-white px-4 py-3 flex justify-between items-center sticky top-0 z-10 shadow-md">
+                        <h1 className="text-sm font-bold tracking-widest">那覇地区夏季大会 (女子)</h1>
                         <button 
                             onClick={handleAuth}
-                            className={`px-3 py-1.5 text-xs font-bold rounded-full ${isAdmin ? 'bg-emerald-500 text-white' : 'bg-slate-600 text-slate-200'}`}
+                            className={`px-3 py-1.5 text-xs font-bold rounded flex items-center gap-1 border transition-colors ${isAdmin ? 'bg-emerald-500 border-emerald-400 text-white' : 'bg-transparent border-slate-600 text-slate-300 hover:bg-slate-800'}`}
                         >
                             {isAdmin ? '🔓 編集モード' : '🔒 閲覧モード'}
                         </button>
                     </header>
 
-                    {/* トーナメント描画エリア */}
-                    <main className="flex-1 w-full flex flex-col items-center pt-4 pb-8 px-2">
-                        
-                        {/* レスポンシブコンテナ（画面幅に合わせて自動縮尺） */}
-                        <div 
-                            className="w-full max-w-[500px] relative bg-white shadow-sm rounded-xl border border-slate-200 overflow-hidden" 
-                            style={{ aspectRatio: `${CANVAS_W} / ${CANVAS_H}` }}
-                        >
-                            {/* 線の描画 (SVG) */}
-                            <svg viewBox={`0 0 ${CANVAS_W} ${CANVAS_H}`} className="absolute inset-0 w-full h-full">
-                                {CONNECTIONS.map((c, i) => {
-                                    const fromNode = NODES[c.from];
-                                    const toNode = NODES[c.to];
-                                    
-                                    const startX = fromNode.cx;
-                                    const startY = fromNode.y;
-                                    const endX = toNode.cx;
-                                    const endY = toNode.y + CARD_H; // 親ノードの下端
-                                    
-                                    const midY = startY + (endY - startY) / 2;
+                    {/* SVGによる完全レスポンシブなトーナメント描画 */}
+                    <div className="w-full mt-2 px-1">
+                        <svg viewBox="0 0 900 1200" className="w-full h-auto block select-none">
+                            
+                            {/* 優勝チームの表示 */}
+                            {champion && (
+                                <g>
+                                    <rect x={300} y={10} width={300} height={70} rx={10} fill="#fef2f2" stroke="#dc2626" strokeWidth="4" />
+                                    <text x={450} y={55} textAnchor="middle" fontSize="36" fontWeight="900" fill="#b91c1c" letterSpacing="4">
+                                        優勝: {getTeam('あ3', champion === 'left')}
+                                    </text>
+                                </g>
+                            )}
 
-                                    // 勝者の線は赤くする
-                                    const isWinnerPath = c.from.startsWith('seed') || (matches[c.from] && matches[c.from].winner);
-                                    const color = isWinnerPath ? "#ef4444" : "#cbd5e1";
-                                    const strokeW = isWinnerPath ? "2.5" : "1.5";
+                            {/* トーナメント線の描画 */}
+                            {Object.values(MATCH_DEFS).map(def => {
+                                const match = matches[def.id];
+                                const isL = match.winner === 'left';
+                                const isR = match.winner === 'right';
+                                const isWin = isL || isR;
 
-                                    return (
-                                        <path 
-                                            key={i} 
-                                            d={`M ${startX} ${startY} L ${startX} ${midY} L ${endX} ${midY} L ${endX} ${endY}`} 
-                                            fill="none" stroke={color} strokeWidth={strokeW} 
-                                        />
-                                    );
-                                })}
-                            </svg>
-
-                            {/* カードの描画 (HTML絶対配置) */}
-                            {Object.entries(NODES).map(([id, node]) => {
-                                // 座標をパーセント(%)に変換して配置することで絶対崩れない
-                                const left = `${((node.cx - CARD_W / 2) / CANVAS_W) * 100}%`;
-                                const top = `${(node.y / CANVAS_H) * 100}%`;
-                                const width = `${(CARD_W / CANVAS_W) * 100}%`;
-                                const height = `${(CARD_H / CANVAS_H) * 100}%`;
-
-                                if (node.isSeed) {
-                                    return (
-                                        <div key={id} className="absolute flex items-center justify-center font-bold text-red-600 tracking-widest" style={{ left, top, width, height, fontSize: '11px' }}>
-                                            {node.label}
-                                        </div>
-                                    );
-                                }
-
-                                const match = matches[id];
-                                const p1 = getTeam(id, true);
-                                const p2 = getTeam(id, false);
-                                const w = match.winner;
+                                // 色と太さの設定 (勝者は赤色、未定は濃いグレー)
+                                const strokeL = isL ? '#dc2626' : '#1e293b';
+                                const strokeR = isR ? '#dc2626' : '#1e293b';
+                                const strokeW = isWin ? '#dc2626' : '#1e293b';
+                                const w = "4";
 
                                 return (
-                                    <div 
-                                        key={id} 
-                                        onClick={() => handleCardClick(id)}
-                                        className={`absolute bg-white border border-slate-300 rounded flex flex-col overflow-hidden shadow-sm ${isAdmin ? 'cursor-pointer active:bg-slate-50' : ''}`}
-                                        style={{ left, top, width, height }}
-                                    >
-                                        <div className="bg-slate-100 text-center font-bold text-slate-500 border-b border-slate-200" style={{ fontSize: '8px', padding: '1px 0' }}>
-                                            {node.label}
-                                        </div>
-                                        <div className={`flex-1 flex px-1 items-center justify-between ${w && w === p1 ? 'bg-red-50' : ''}`}>
-                                            <span className={`truncate ${w && w === p1 ? 'font-bold text-red-600' : 'text-slate-700'}`} style={{ width: '65%', fontSize: '10px' }}>{p1 || '-'}</span>
-                                            <span className={`font-bold ${w && w === p1 ? 'text-red-600' : 'text-slate-900'}`} style={{ fontSize: '11px' }}>{match.s1}</span>
-                                        </div>
-                                        <div className={`flex-1 flex px-1 items-center justify-between border-t border-slate-100 ${w && w === p2 ? 'bg-red-50' : ''}`}>
-                                            <span className={`truncate ${w && w === p2 ? 'font-bold text-red-600' : 'text-slate-700'}`} style={{ width: '65%', fontSize: '10px' }}>{p2 || '-'}</span>
-                                            <span className={`font-bold ${w && w === p2 ? 'text-red-600' : 'text-slate-900'}`} style={{ fontSize: '11px' }}>{match.s2}</span>
-                                        </div>
-                                    </div>
+                                    <g key={def.id}>
+                                        {/* 左縦線 (下流の試合がない場合のみ描画) */}
+                                        {!def.inL && <line x1={def.lx} y1={def.ly} x2={def.lx} y2={def.y} stroke={strokeL} strokeWidth={w} strokeLinecap="round" />}
+                                        {/* 右縦線 (下流の試合がない場合のみ描画) */}
+                                        {!def.inR && <line x1={def.rx} y1={def.ry} x2={def.rx} y2={def.y} stroke={strokeR} strokeWidth={w} strokeLinecap="round" />}
+                                        
+                                        {/* 横線 (左・右) */}
+                                        <line x1={def.lx} y1={def.y} x2={def.cx} y2={def.y} stroke={strokeL} strokeWidth={w} strokeLinecap="round" />
+                                        <line x1={def.cx} y1={def.y} x2={def.rx} y2={def.y} stroke={strokeR} strokeWidth={w} strokeLinecap="round" />
+                                        
+                                        {/* 上への縦線 */}
+                                        <line x1={def.cx} y1={def.y} x2={def.cx} y2={def.uy} stroke={strokeW} strokeWidth={w} strokeLinecap="round" />
+                                        
+                                        {/* スコアの表示 */}
+                                        {(match.s1 !== '' || match.s2 !== '') && (
+                                            <text x={def.cx} y={def.y - 12} textAnchor="middle" fontSize="32" fontWeight="900" fill="#1e293b">
+                                                {match.s1} - {match.s2}
+                                            </text>
+                                        )}
+                                        
+                                        {/* 試合番号（ラベル） */}
+                                        <text x={def.cx} y={def.y + 32} textAnchor="middle" fontSize="22" fontWeight="bold" fill="#64748b">
+                                            {def.label}
+                                        </text>
+
+                                        {/* クリック領域 (透明な四角形) */}
+                                        <rect 
+                                            x={def.lx} y={def.y - 40} width={def.rx - def.lx} height={80} 
+                                            fill="transparent" 
+                                            onClick={() => handleCardClick(def.id)}
+                                            className={isAdmin ? "cursor-pointer hover:fill-slate-100 transition-colors" : ""}
+                                        />
+                                    </g>
                                 );
                             })}
+
+                            {/* 最下部のチーム名（縦書き） */}
+                            {TEAMS.map(t => (
+                                <foreignObject key={t.name} x={t.x - 20} y={950} width={40} height={200}>
+                                    <div style={{ writingMode: 'vertical-rl', textAlign: 'left', fontSize: '28px', fontWeight: 'bold', letterSpacing: '4px', height: '100%', margin: '0 auto', color: '#111' }}>
+                                        {t.name}
+                                    </div>
+                                </foreignObject>
+                            ))}
+                        </svg>
+
+                        <div className="text-center text-slate-400 text-xs font-bold mt-2">
+                            {isAdmin ? '試合の線（A3等）をタップしてスコアを入力' : '最新の試合結果が表示されます'}
                         </div>
+                    </div>
 
-                        <p className="text-center text-slate-400 text-xs mt-6 font-bold">
-                            {isAdmin ? 'カードをタップしてスコアを入力' : '大会本部の速報システム'}
-                        </p>
-                    </main>
-
-                    {/* スコア入力モーダル */}
+                    {/* 超シンプルなスコア入力モーダル */}
                     {editingId && (() => {
                         const p1 = getTeam(editingId, true);
                         const p2 = getTeam(editingId, false);
                         
-                        if (!p1 || !p2) {
+                        // 前の試合が終わっていない場合
+                        if (p1.includes('勝者') || p2.includes('勝者')) {
                             return (
-                                <div className="fixed inset-0 bg-slate-900/40 flex items-center justify-center p-4 z-50">
-                                    <div className="bg-white p-6 rounded-xl text-center shadow-2xl w-full max-w-xs">
-                                        <p className="font-bold mb-4 text-slate-700">対戦カードが未確定です<br/>前の試合結果を入力してください</p>
-                                        <button onClick={() => setEditingId(null)} className="w-full py-3 bg-slate-200 text-slate-700 rounded-lg font-bold">閉じる</button>
+                                <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 z-50">
+                                    <div className="bg-white p-6 rounded-2xl text-center shadow-2xl w-full max-w-sm">
+                                        <p className="font-bold mb-6 text-slate-700 text-lg">対戦カードが未確定です<br/><span className="text-sm text-slate-500">前の試合結果を入力してください</span></p>
+                                        <button onClick={() => setEditingId(null)} className="w-full py-4 bg-slate-200 text-slate-700 rounded-xl font-bold hover:bg-slate-300 transition-colors">閉じる</button>
                                     </div>
                                 </div>
                             );
@@ -278,27 +280,29 @@
                         return (
                             <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 z-50">
                                 <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden">
-                                    <div className="bg-slate-800 text-white px-5 py-4 font-bold text-center tracking-widest">
-                                        {NODES[editingId].label} 試合結果
+                                    <div className="bg-slate-800 text-white px-5 py-4 font-bold text-center text-lg tracking-widest border-b border-slate-700">
+                                        {MATCH_DEFS[editingId].label} 試合結果
                                     </div>
                                     <form onSubmit={(e) => {
                                         e.preventDefault();
                                         handleSave(editingId, e.target.s1.value, e.target.s2.value);
                                     }} className="p-6">
                                         
-                                        <div className="flex items-center justify-between bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4">
-                                            <span className="font-bold text-slate-800 text-lg w-1/2 truncate">{p1}</span>
-                                            <input name="s1" type="tel" defaultValue={matches[editingId].s1} className="w-20 text-center text-2xl font-black border-2 border-slate-300 rounded-lg p-2 focus:border-blue-500 outline-none" autoFocus/>
-                                        </div>
-                                        
-                                        <div className="flex items-center justify-between bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6">
-                                            <span className="font-bold text-slate-800 text-lg w-1/2 truncate">{p2}</span>
-                                            <input name="s2" type="tel" defaultValue={matches[editingId].s2} className="w-20 text-center text-2xl font-black border-2 border-slate-300 rounded-lg p-2 focus:border-blue-500 outline-none"/>
+                                        <div className="flex items-center justify-between gap-6 mb-8">
+                                            <div className="flex-1 flex flex-col items-center">
+                                                <span className="font-bold text-slate-700 mb-3 text-lg">{p1}</span>
+                                                <input name="s1" type="tel" defaultValue={matches[editingId].s1} className="w-full text-center text-4xl font-black border-2 border-slate-300 rounded-xl py-3 focus:border-red-500 focus:ring-2 focus:ring-red-200 outline-none transition-all" autoFocus />
+                                            </div>
+                                            <div className="text-4xl font-bold text-slate-300">-</div>
+                                            <div className="flex-1 flex flex-col items-center">
+                                                <span className="font-bold text-slate-700 mb-3 text-lg">{p2}</span>
+                                                <input name="s2" type="tel" defaultValue={matches[editingId].s2} className="w-full text-center text-4xl font-black border-2 border-slate-300 rounded-xl py-3 focus:border-red-500 focus:ring-2 focus:ring-red-200 outline-none transition-all" />
+                                            </div>
                                         </div>
 
                                         <div className="flex gap-3">
-                                            <button type="button" onClick={() => setEditingId(null)} className="flex-1 py-3.5 bg-white text-slate-600 font-bold rounded-xl border border-slate-300">キャンセル</button>
-                                            <button type="submit" className="flex-[2] py-3.5 bg-blue-600 text-white font-bold rounded-xl shadow-md">保存する</button>
+                                            <button type="button" onClick={() => setEditingId(null)} className="flex-1 py-4 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-colors">キャンセル</button>
+                                            <button type="submit" className="flex-1 py-4 bg-red-600 text-white font-bold rounded-xl shadow-lg hover:bg-red-700 transition-colors">保存</button>
                                         </div>
                                     </form>
                                 </div>
