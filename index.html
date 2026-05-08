@@ -204,6 +204,7 @@
             const championCx = currentDefs[championMatchId].cx;
             
             // 色のテーマ (女子: 赤, 男子: 青)
+            // 枠色などはタブの色を継承しますが、勝者の線(strokeW)は常に赤色(#dc2626)にします
             const winColor = activeTab === 'girls' ? '#dc2626' : '#2563eb';
             const champBg = activeTab === 'girls' ? '#fef2f2' : '#eff6ff';
             const champText = activeTab === 'girls' ? '#b91c1c' : '#1d4ed8';
@@ -237,8 +238,8 @@
                         </div>
                     </div>
 
-                    {/* SVGによるトーナメント描画 */}
-                    <div className="w-full mt-4 px-1 flex-1">
+                    {/* SVGによるトーナメント描画と試合時間表示 */}
+                    <div className="w-full mt-4 px-1 flex-1 flex flex-col">
                         <svg viewBox={viewBox} className="w-full h-auto block select-none transition-all duration-300">
                             
                             {/* 優勝チームの表示 */}
@@ -258,9 +259,10 @@
                                 const isR = match.winner === 'right';
                                 const isWin = isL || isR;
 
-                                const strokeL = isL ? winColor : '#1e293b';
-                                const strokeR = isR ? winColor : '#1e293b';
-                                const strokeW = isWin ? winColor : '#1e293b';
+                                // 勝ち上がりの線は男女ともに赤色（#dc2626）に固定
+                                const strokeL = isL ? '#dc2626' : '#1e293b';
+                                const strokeR = isR ? '#dc2626' : '#1e293b';
+                                const strokeW = isWin ? '#dc2626' : '#1e293b';
                                 const w = "4";
 
                                 return (
@@ -315,11 +317,33 @@
                                 );
                             })}
                         </svg>
+
+                        {/* 試合時間の一覧表示 (SVGの下の空きスペースに配置) */}
+                        <div className="px-2 mt-4 mb-8 max-w-md mx-auto w-full">
+                            <div className="grid grid-cols-2 gap-2 text-[10px] sm:text-xs text-slate-700">
+                                <div className="bg-slate-50 rounded border border-slate-200 p-2 shadow-sm">
+                                    <div className="text-center font-bold border-b border-slate-300 pb-1 mb-1.5">大会1日目 (A・B)</div>
+                                    <div className="flex justify-between px-1"><span>第1試合</span><span className="font-bold tracking-wider">9:00</span></div>
+                                    <div className="flex justify-between px-1"><span>第2試合</span><span className="font-bold tracking-wider">10:10</span></div>
+                                    <div className="flex justify-between px-1"><span>第3試合</span><span className="font-bold tracking-wider">11:20</span></div>
+                                    <div className="flex justify-between px-1"><span>第4試合</span><span className="font-bold tracking-wider">12:30</span></div>
+                                    <div className="flex justify-between px-1"><span>第5試合</span><span className="font-bold tracking-wider">13:40</span></div>
+                                </div>
+                                <div className="bg-slate-50 rounded border border-slate-200 p-2 shadow-sm">
+                                    <div className="text-center font-bold border-b border-slate-300 pb-1 mb-1.5">大会2日目 (あ・い)</div>
+                                    <div className="flex justify-between px-1"><span>第1試合</span><span className="font-bold tracking-wider">10:00</span></div>
+                                    <div className="flex justify-between px-1"><span>第2試合</span><span className="font-bold tracking-wider">11:20</span></div>
+                                    <div className="flex justify-between px-1"><span>第3試合</span><span className="font-bold tracking-wider">12:40</span></div>
+                                    <div className="flex justify-between px-1"><span>第4試合</span><span className="font-bold tracking-wider">14:00</span></div>
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
 
                     {/* 編集モード時のUI */}
                     {isAdmin && (
-                        <div className="mt-8 px-4 w-full flex flex-col items-center gap-4 border-t border-slate-200 pt-6">
+                        <div className="mt-2 px-4 w-full flex flex-col items-center gap-4 border-t border-slate-200 pt-6">
                             <p className={`text-sm font-bold ${activeTab === 'girls' ? 'text-red-600' : 'text-blue-600'}`}>現在「編集モード」です。試合の線をタップしてスコアを入力してください。</p>
                             <div className="flex gap-4 w-full max-w-sm">
                                 <button onClick={handleAuth} className="flex-1 py-3 bg-slate-700 text-white rounded-lg font-bold shadow-md">編集を終了する</button>
