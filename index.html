@@ -92,7 +92,8 @@
 
         function App() {
             const [matches, setMatches] = useState(INITIAL_STATE);
-            const [activeTab, setActiveTab] = useState('girls'); // 'girls' or 'boys'
+            // 初期表示を男子に設定
+            const [activeTab, setActiveTab] = useState('boys'); 
             const [isAdmin, setIsAdmin] = useState(false);
             const [editingId, setEditingId] = useState(null);
 
@@ -219,19 +220,19 @@
                             </div>
                         </header>
                         
-                        {/* タブ切り替え */}
+                        {/* タブ切り替え (男子を左、女子を右に) */}
                         <div className="flex bg-white">
-                            <button 
-                                onClick={() => setActiveTab('girls')} 
-                                className={`flex-1 py-3 text-sm font-bold border-b-4 transition-colors ${activeTab === 'girls' ? 'border-red-500 text-red-600 bg-red-50' : 'border-transparent text-slate-400 hover:bg-slate-50'}`}
-                            >
-                                女子の部
-                            </button>
                             <button 
                                 onClick={() => setActiveTab('boys')} 
                                 className={`flex-1 py-3 text-sm font-bold border-b-4 transition-colors ${activeTab === 'boys' ? 'border-blue-500 text-blue-600 bg-blue-50' : 'border-transparent text-slate-400 hover:bg-slate-50'}`}
                             >
                                 男子の部
+                            </button>
+                            <button 
+                                onClick={() => setActiveTab('girls')} 
+                                className={`flex-1 py-3 text-sm font-bold border-b-4 transition-colors ${activeTab === 'girls' ? 'border-red-500 text-red-600 bg-red-50' : 'border-transparent text-slate-400 hover:bg-slate-50'}`}
+                            >
+                                女子の部
                             </button>
                         </div>
                     </div>
@@ -293,13 +294,26 @@
                             })}
 
                             {/* 最下部のチーム名（縦書き） */}
-                            {currentTeams.map(t => (
-                                <foreignObject key={t.name} x={t.x - 20} y={950} width={40} height={200}>
-                                    <div style={{ writingMode: 'vertical-rl', textAlign: 'left', fontSize: '28px', fontWeight: 'bold', letterSpacing: '4px', height: '100%', margin: '0 auto', color: '#111' }}>
-                                        {t.name}
-                                    </div>
-                                </foreignObject>
-                            ))}
+                            {currentTeams.map(t => {
+                                // 文字数に応じてフォントサイズと文字間隔を調整し、はみ出しを防止
+                                const isLongName = t.name.length > 4;
+                                return (
+                                    <foreignObject key={t.name} x={t.x - 20} y={950} width={40} height={240}>
+                                        <div style={{ 
+                                            writingMode: 'vertical-rl', 
+                                            textAlign: 'left', 
+                                            fontSize: isLongName ? '20px' : '28px', 
+                                            fontWeight: 'bold', 
+                                            letterSpacing: isLongName ? '1px' : '4px', 
+                                            height: '100%', 
+                                            margin: '0 auto', 
+                                            color: '#111' 
+                                        }}>
+                                            {t.name}
+                                        </div>
+                                    </foreignObject>
+                                );
+                            })}
                         </svg>
                     </div>
 
